@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
                 first_name,
                 last_name,
                 company,
-                tags, // Append tags? Replace? Let's just update if provided.
+                // tags field removed - using relational table
                 custom_fields,
                 updated_at: new Date().toISOString(),
             })
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
                 first_name,
                 last_name,
                 company,
-                tags: tags || [],
+                // tags field removed - using relational table
                 custom_fields: custom_fields || {},
                 status: 'active',
                 source: 'api_webhook',
@@ -118,6 +118,51 @@ export async function POST(request: NextRequest) {
         .then(() => { });
 
     const contact = result.data;
+
+    // --- Relational Tags Logic ---
+    if (tags && Array.isArray(tags) && contact) {
+        for (const tagName of tags) {
+            if (typeof tagName !== 'string') continue;
+
+            // 1. Find or Create Tag
+            let tagId;
+            const { data: existingTag } = await supabaseAdmin
+                .from('tags')
+                .select('id')
+                .eq('user_id', keyRecord.user_id)
+                .eq('name', tagName)
+                .single();
+
+            if (existingTag) {
+                tagId = existingTag.id;
+            } else {
+                const { data: newTag, error: createTagError } = await supabaseAdmin
+                    .from('tags')
+                    .insert({
+                        user_id: keyRecord.user_id,
+                        name: tagName
+                    })
+                    .select('id')
+                    .single();
+
+                if (!createTagError && newTag) {
+                    tagId = newTag.id;
+                }
+            }
+
+            // 2. Link to Contact
+            if (tagId) {
+                await supabaseAdmin
+                    .from('contact_tags')
+                    .upsert({
+                        contact_id: contact.id,
+                        tag_id: tagId
+                    }, { onConflict: 'contact_id, tag_id' });
+            }
+        }
+    }
+    // -----------------------------
+
     const eventName = body.event;
 
     // 5. Trigger Automations (If event is present)
