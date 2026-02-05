@@ -25,7 +25,7 @@ import { Separator } from "@/components/ui/separator"
 
 // Types for our local state
 type TriggerConfig = {
-    type: 'manual' | 'contact_added' | 'tag_added' | 'webhook_received';
+    type: 'manual' | 'contact_added' | 'tag_added' | 'webhook_received' | 'event';
     config: any;
 }
 
