@@ -10,6 +10,14 @@
         "test": "jest",
         "test:watch": "jest --watch"
     },
+    "overrides": {
+        "framer-motion-3d": {
+            "@react-three/fiber": "$@react-three/fiber"
+        },
+        "@react-three/drei": {
+            "@react-three/fiber": "$@react-three/fiber"
+        }
+    },
     "dependencies": {
         "@monaco-editor/react": "^4.7.0",
         "@radix-ui/react-alert-dialog": "^1.1.15",
