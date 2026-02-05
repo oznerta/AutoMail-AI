@@ -23,7 +23,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         { data: recentContacts }
     ] = await Promise.all([
         supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-        supabase.from('automations').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('active', true),
+        supabase.from('automations').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'active'),
         // Approximating "Emails Sent" by looking at completed automation queue items
         // Note: This mixes all automation step types, but for now it's our best proxy without a dedicated logs table.
         supabase.from('automation_queue').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
