@@ -177,7 +177,7 @@ export async function getAvailableTags(): Promise<string[]> {
 }
 
 export async function generateWebhookToken(id: string) {
-    const supabase = createClient();
+    const supabase = createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return { error: "Unauthorized" };
@@ -188,7 +188,7 @@ export async function generateWebhookToken(id: string) {
     // @ts-ignore 
     const { error } = await supabase
         .from('automations')
-        .update({ webhook_token: webhookToken })
+        .update({ webhook_token: webhookToken } as any)
         .eq('id', id)
         .eq('user_id', user.id);
 
