@@ -209,12 +209,34 @@ export async function GET(request: Request) {
                     else if (currentStep.type === 'add_tag') {
                         const tagName = currentStep.config.tag;
                         if (tagName && contact && (contact as any).id) {
-                            const currentTags = (contact as any).tags || [];
-                            if (!currentTags.includes(tagName)) {
+                            // Finds or Create Tag
+                            let tagId;
+                            const { data: existingTag } = await supabaseAdmin
+                                .from('tags')
+                                .select('id')
+                                .eq('user_id', job.user_id)
+                                .eq('name', tagName)
+                                .single();
+
+                            if (existingTag) {
+                                tagId = existingTag.id;
+                            } else {
+                                const { data: newTag } = await supabaseAdmin
+                                    .from('tags')
+                                    .insert({ user_id: job.user_id, name: tagName })
+                                    .select('id')
+                                    .single();
+                                if (newTag) tagId = newTag.id;
+                            }
+
+                            // Link to Contact
+                            if (tagId) {
                                 await supabaseAdmin
-                                    .from('contacts')
-                                    .update({ tags: [...currentTags, tagName] })
-                                    .eq('id', (contact as any).id);
+                                    .from('contact_tags')
+                                    .upsert({
+                                        contact_id: (contact as any).id,
+                                        tag_id: tagId
+                                    }, { onConflict: 'contact_id, tag_id' });
                                 console.log(`Added tag '${tagName}' to contact ${(contact as any).email}`);
                             }
                         }
