@@ -51,10 +51,25 @@ export function TriggerPanel({ config, onChange, availableTags = [] }: { config:
                                 <SelectItem value="contact_added">Contact Added</SelectItem>
                                 <SelectItem value="form_submitted">Form Submitted</SelectItem>
                                 <SelectItem value="tag_added">Tag Added</SelectItem>
-                                <SelectItem value="custom_webhook">Custom Webhook</SelectItem>
+                                <SelectItem value="event">API Event (Ingest)</SelectItem>
+                                <SelectItem value="webhook">Custom Webhook</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
+
+                    {trigger.event === 'event' && (
+                        <div className="space-y-2">
+                            <Label>Event Name</Label>
+                            <Input
+                                placeholder="e.g. user.signup"
+                                value={trigger.value || ""}
+                                onChange={(e) => updateTrigger('value', e.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Make sure this matches the <code>event</code> field in your API call.
+                            </p>
+                        </div>
+                    )}
 
                     {trigger.event === 'tag_added' && (
                         <div className="space-y-2">

@@ -42,7 +42,7 @@ export default function ApiIngestPage() {
                 <h3 className="text-xl font-semibold">Example Request</h3>
                 <div className="rounded-md bg-zinc-950 p-4 overflow-x-auto">
                     <pre className="text-sm text-zinc-50">
-                        {`curl -X POST "https://your-domain.com/api/ingest?key=YOUR_API_KEY" \\
+                        {`curl -X POST "https://automailai.vercel.app/api/ingest?key=YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "email": "newlead@example.com",

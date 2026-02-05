@@ -175,3 +175,28 @@ export async function getAvailableTags(): Promise<string[]> {
     // Since RLS enforces user_id, we just get the tags for this user
     return (data as any[]).map(t => t.name);
 }
+
+export async function generateWebhookToken(id: string) {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { error: "Unauthorized" };
+
+    const webhookToken = `wh_${crypto.randomUUID().replace(/-/g, '')}`;
+
+    // Suppress TS error if table types aren't generated yet or are out of sync
+    // @ts-ignore 
+    const { error } = await supabase
+        .from('automations')
+        .update({ webhook_token: webhookToken })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) {
+        console.error("Generate Token Error:", error);
+        return { error: "Failed to generate token" };
+    }
+
+    revalidatePath(`/automations/${id}`);
+    return { success: true, token: webhookToken };
+}

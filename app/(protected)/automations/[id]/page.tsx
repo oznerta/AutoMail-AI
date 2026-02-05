@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Automation, updateAutomation, getAutomation } from "../actions"
+import { Automation, updateAutomation, getAutomation, generateWebhookToken } from "../actions"
 import { getSenderIdentities } from "../../settings/actions"
 import { getTemplates } from "../../email-builder/actions"
 import { Button } from "@/components/ui/button"
@@ -144,8 +144,9 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
     if (!automation) return <div className="p-8">Automation not found</div>
 
     // Construct Webhook URL
-    const webhookUrl = typeof window !== 'undefined'
-        ? `${window.location.origin}/api/hooks/${automation.id}?token=${(automation as any).webhook_token || ''}`
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    const webhookUrl = baseUrl
+        ? `${baseUrl}/api/hooks/${automation.id}?token=${(automation as any).webhook_token || ''}`
         : '';
 
     return (
@@ -224,7 +225,19 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
                                 <Label>When this happens...</Label>
                                 <Select
                                     value={trigger.type}
-                                    onValueChange={(val: any) => setTrigger({ type: val, config: {} })}
+                                    onValueChange={async (val: any) => {
+                                        setTrigger({ type: val, config: {} });
+
+                                        // Auto-generate token if switching to webhook and it's missing
+                                        if (val === 'webhook_received' && automation && !(automation as any).webhook_token) {
+                                            toast({ title: "Generating Webhook Token...", description: "Setting up your secure webhook URL." });
+                                            const res = await generateWebhookToken(automation.id);
+                                            if (res.success && res.token) {
+                                                setAutomation({ ...automation, webhook_token: res.token } as any);
+                                                toast({ title: "Token Generated", description: "Your webhook is ready to use." });
+                                            }
+                                        }
+                                    }}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select Trigger" />
@@ -233,12 +246,27 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
                                         <SelectItem value="manual">Manual / Draft</SelectItem>
                                         <SelectItem value="contact_added">Contact Created</SelectItem>
                                         <SelectItem value="tag_added">Tag Added</SelectItem>
+                                        <SelectItem value="event">API Event (Ingest)</SelectItem>
                                         <SelectItem value="webhook_received">Webhook Received ⚡</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
 
                             {/* Trigger Specific Config */}
+                            {trigger.type === 'event' && (
+                                <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
+                                    <Label>Event Name</Label>
+                                    <Input
+                                        placeholder="e.g. user.signup"
+                                        value={trigger.config.event || ''}
+                                        onChange={(e) => setTrigger({ ...trigger, config: { event: e.target.value } })}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Trigger this by sending <code>{"{ event: '"}{trigger.config.event || 'user.signup'}{"' }"}</code> to the Ingest API.
+                                    </p>
+                                </div>
+                            )}
+
                             {trigger.type === 'tag_added' && (
                                 <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
                                     <Label>Which Tag?</Label>
@@ -275,6 +303,7 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
                                             <Copy className="h-4 w-4" />
                                         </Button>
                                     </div>
+                                    {/* Token is auto-generated on selection if missing */}
                                 </div>
                             )}
                         </CardContent>

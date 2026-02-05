@@ -110,11 +110,77 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // 4. Update usage stats (async, don't block response)
-    await supabaseAdmin
+    // 4. Update usage stats (async)
+    supabaseAdmin
         .from("webhook_keys")
         .update({ last_used_at: new Date().toISOString() })
-        .eq("id", keyRecord.id);
+        .eq("id", keyRecord.id)
+        .then(() => { });
 
-    return NextResponse.json({ success: true, contact: result.data });
+    const contact = result.data;
+    const eventName = body.event;
+
+    // 5. Trigger Automations (If event is present)
+    let triggeredWorkflows = 0;
+
+    if (eventName && contact) {
+        // Fetch active event-based automations for this user
+        // We fetch all 'event' triggers for this user and filter in memory to avoid complex JSONB syntax errors
+        const { data: automations } = await supabaseAdmin
+            .from("automations")
+            .select("*")
+            .eq("user_id", keyRecord.user_id)
+            .eq("status", "active")
+            .eq("trigger_type", "event");
+
+        if (automations && automations.length > 0) {
+            const queueItems = [];
+
+            for (const auto of automations) {
+                // Check if the event matches (assuming workflow_config.trigger.value holds the event name)
+                // Fallback: check if the automation name implies it (loose matching for MVP if config structure varies)
+                // Ideally: auto.workflow_config?.trigger?.value === eventName
+
+                const triggerConfig = (auto.workflow_config as any)?.trigger;
+                // Handle different config structures:
+                // 1. { trigger: { type: 'event', config: { event: 'name' } } } (New Page.tsx)
+                // 2. { trigger: { event: 'name' } } (Legacy/Other)
+
+                const targetEvent = triggerConfig?.config?.event || triggerConfig?.value || triggerConfig?.event;
+
+                if (targetEvent === eventName) {
+                    queueItems.push({
+                        automation_id: auto.id,
+                        contact_id: contact.id,
+                        user_id: keyRecord.user_id,
+                        status: 'pending',
+                        execute_at: new Date().toISOString(),
+                        payload: {
+                            step_index: 0,
+                            event_data: body // Pass full payload to workflow
+                        }
+                    });
+                }
+            }
+
+            if (queueItems.length > 0) {
+                const { error: queueError } = await supabaseAdmin
+                    .from("automation_queue")
+                    .insert(queueItems);
+
+                if (!queueError) {
+                    triggeredWorkflows = queueItems.length;
+                    console.log(`[Ingest] Triggered ${triggeredWorkflows} workflows for event '${eventName}'`);
+                } else {
+                    console.error("[Ingest] Failed to queue automations:", queueError);
+                }
+            }
+        }
+    }
+
+    return NextResponse.json({
+        success: true,
+        contact: contact,
+        triggered: triggeredWorkflows
+    });
 }

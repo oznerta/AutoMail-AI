@@ -19,7 +19,7 @@ export default function ApiOverviewPage() {
                     Pass the API key as a query parameter <code>?key=YOUR_API_KEY</code> for GET/POST requests.
                 </p>
                 <div className="rounded-md bg-muted p-4">
-                    <code className="text-sm">https://automail.ai/api/ingest?key=sk_live_...</code>
+                    <code className="text-sm">https://automailai.vercel.app/api/ingest?key=sk_live_...</code>
                 </div>
             </div>
 
@@ -29,7 +29,7 @@ export default function ApiOverviewPage() {
                     The base URL for all API requests is your hosted domain:
                 </p>
                 <div className="rounded-md bg-muted p-4">
-                    <code className="text-sm">https://your-domain.com/api</code>
+                    <code className="text-sm">https://automailai.vercel.app/api</code>
                 </div>
             </div>
         </div>
