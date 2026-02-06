@@ -161,7 +161,7 @@ export async function GET(request: Request) {
                         nextStepIndex++;
                         shouldContinue = false;
                     }
-                    else if (currentStep.type === 'send_email') {
+                    if (currentStep.type === 'send_email') {
                         if (contact && (contact as any).email) {
                             // BYOK: Fetch User's Resend Key using relation
                             const automationObj = Array.isArray(automation) ? automation[0] : automation;
@@ -185,10 +185,22 @@ export async function GET(request: Request) {
                             const apiKey = await decrypt(keyData.encrypted_value);
                             const userResend = new Resend(apiKey);
 
+                            // Fetch email template from database using step config
+                            const templateId = currentStep.config?.templateId;
+                            const { data: template, error: templateError } = await supabaseAdmin
+                                .from('email_templates')
+                                .select('subject, content')
+                                .eq('id', templateId)
+                                .single();
+
+                            if (templateError || !template) {
+                                console.error(`[Cron] Failed to fetch template ${templateId}:`, templateError);
+                                throw new Error(`Template fetch failed: ${templateError?.message || 'Template not found'}`);
+                            }
+
                             // Replace Variables
-                            // CRITICAL FIX: Use automationObj and ensure String type
-                            let htmlContent = String(automationObj.email_template || "<p>No content</p>");
-                            let subjectLine = String(automationObj.workflow_config?.subject || `Update from ${automationObj.name}`);
+                            let htmlContent = String(template.content || "<p>No content</p>");
+                            let subjectLine = String(template.subject || "Update");
 
                             const firstName = (contact as any).first_name || '';
                             const lastName = (contact as any).last_name || '';
@@ -202,9 +214,9 @@ export async function GET(request: Request) {
                             // Simple subject replacement
                             subjectLine = subjectLine.replace(/{{first_name}}/g, firstName);
 
-                            // Dynamic Sender Configuration
+                            // Dynamic Sender Configuration from step config
                             let senderEmail = 'onboarding@resend.dev'; // Fallback
-                            const senderId = automationObj.workflow_config?.sender_id;
+                            const senderId = currentStep.config?.senderId;
 
                             if (senderId) {
                                 const { data: senderData } = await supabaseAdmin
@@ -220,13 +232,13 @@ export async function GET(request: Request) {
                             }
 
                             try {
-                                await userResend.emails.send({
+                                const emailResult = await userResend.emails.send({
                                     from: senderEmail,
                                     to: email,
                                     subject: subjectLine,
                                     html: htmlContent
                                 });
-                                console.log(`[Cron] Email sent to ${email} from ${senderEmail}`);
+                                console.log(`[Cron] Email sent to ${email} from ${senderEmail}`, emailResult);
                             } catch (emailError: any) {
                                 console.error(`[Cron] Email send failed:`, emailError);
                                 throw new Error(`Email send failed: ${emailError.message || 'Unknown error'}`);
