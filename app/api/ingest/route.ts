@@ -223,15 +223,20 @@ export async function POST(request: NextRequest) {
 
                                     // Get email template
                                     const templateId = firstStep.config?.templateId;
-                                    const { data: template } = await supabaseAdmin
+                                    const { data: template, error: templateError } = await supabaseAdmin
                                         .from('email_templates')
-                                        .select('subject, html_content')
+                                        .select('subject, content')
                                         .eq('id', templateId)
                                         .single();
 
+                                    if (templateError) {
+                                        console.error(`[Ingest] Failed to fetch template ${templateId}:`, templateError);
+                                        throw new Error(`Template fetch failed: ${templateError.message}`);
+                                    }
+
                                     if (template) {
                                         // Replace variables
-                                        let htmlContent = String(template.html_content || "<p>No content</p>");
+                                        let htmlContent = String(template.content || "<p>No content</p>");
                                         let subjectLine = String(template.subject || "Update");
 
                                         const firstName = contact.first_name || '';
@@ -262,14 +267,14 @@ export async function POST(request: NextRequest) {
                                             }
                                         }
 
-                                        await userResend.emails.send({
+                                        const emailResult = await userResend.emails.send({
                                             from: senderEmail,
                                             to: emailAddr,
                                             subject: subjectLine,
                                             html: htmlContent
                                         });
 
-                                        console.log(`[Ingest] Instant email sent to ${emailAddr} from ${senderEmail}`);
+                                        console.log(`[Ingest] Instant email sent to ${emailAddr} from ${senderEmail}`, emailResult);
                                     }
                                 }
                             } else if (firstStep.type === 'add_tag') {
@@ -319,8 +324,12 @@ export async function POST(request: NextRequest) {
                                     }
                                 });
                             }
-                        } catch (instantError) {
-                            console.error(`[Ingest] Instant execution failed:`, instantError);
+                        } catch (instantError: any) {
+                            console.error(`[Ingest] Instant execution failed for automation ${auto.id}:`, {
+                                error: instantError.message,
+                                stack: instantError.stack,
+                                stepType: firstStep?.type
+                            });
                             // Fallback: queue entire workflow
                             queueItems.push({
                                 automation_id: auto.id,
