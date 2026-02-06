@@ -202,12 +202,35 @@ export async function GET(request: Request) {
                             // Simple subject replacement
                             subjectLine = subjectLine.replace(/{{first_name}}/g, firstName);
 
-                            await userResend.emails.send({
-                                from: 'onboarding@resend.dev', // TODO: Make dynamic from workflow_config.from_email
-                                to: email,
-                                subject: subjectLine,
-                                html: htmlContent
-                            });
+                            // Dynamic Sender Configuration
+                            let senderEmail = 'onboarding@resend.dev'; // Fallback
+                            const senderId = automationObj.workflow_config?.sender_id;
+
+                            if (senderId) {
+                                const { data: senderData } = await supabaseAdmin
+                                    .from('sender_identities')
+                                    .select('email, name')
+                                    .eq('id', senderId)
+                                    .eq('user_id', userId)
+                                    .single();
+
+                                if (senderData) {
+                                    senderEmail = `${senderData.name} <${senderData.email}>`;
+                                }
+                            }
+
+                            try {
+                                await userResend.emails.send({
+                                    from: senderEmail,
+                                    to: email,
+                                    subject: subjectLine,
+                                    html: htmlContent
+                                });
+                                console.log(`[Cron] Email sent to ${email} from ${senderEmail}`);
+                            } catch (emailError: any) {
+                                console.error(`[Cron] Email send failed:`, emailError);
+                                throw new Error(`Email send failed: ${emailError.message || 'Unknown error'}`);
+                            }
                         }
                         nextStepIndex++;
                     }
@@ -215,35 +238,40 @@ export async function GET(request: Request) {
                     else if (currentStep.type === 'add_tag') {
                         const tagName = currentStep.config.tag;
                         if (tagName && contact && (contact as any).id) {
-                            // Finds or Create Tag
-                            let tagId;
-                            const { data: existingTag } = await supabaseAdmin
-                                .from('tags')
-                                .select('id')
-                                .eq('user_id', automation.user_id)
-                                .eq('name', tagName)
-                                .single();
-
-                            if (existingTag) {
-                                tagId = existingTag.id;
-                            } else {
-                                const { data: newTag } = await supabaseAdmin
+                            try {
+                                // Finds or Create Tag
+                                let tagId;
+                                const { data: existingTag } = await supabaseAdmin
                                     .from('tags')
-                                    .insert({ user_id: automation.user_id, name: tagName })
                                     .select('id')
+                                    .eq('user_id', automation.user_id)
+                                    .eq('name', tagName)
                                     .single();
-                                if (newTag) tagId = newTag.id;
-                            }
 
-                            // Link to Contact
-                            if (tagId) {
-                                await supabaseAdmin
-                                    .from('contact_tags')
-                                    .upsert({
-                                        contact_id: (contact as any).id,
-                                        tag_id: tagId
-                                    }, { onConflict: 'contact_id, tag_id' });
-                                console.log(`Added tag '${tagName}' to contact ${(contact as any).email}`);
+                                if (existingTag) {
+                                    tagId = existingTag.id;
+                                } else {
+                                    const { data: newTag } = await supabaseAdmin
+                                        .from('tags')
+                                        .insert({ user_id: automation.user_id, name: tagName })
+                                        .select('id')
+                                        .single();
+                                    if (newTag) tagId = newTag.id;
+                                }
+
+                                // Link to Contact
+                                if (tagId) {
+                                    await supabaseAdmin
+                                        .from('contact_tags')
+                                        .upsert({
+                                            contact_id: (contact as any).id,
+                                            tag_id: tagId
+                                        }, { onConflict: 'contact_id, tag_id' });
+                                    console.log(`[Cron] Added tag '${tagName}' to contact ${(contact as any).email}`);
+                                }
+                            } catch (tagError: any) {
+                                console.error(`[Cron] Tag operation failed for '${tagName}':`, tagError);
+                                // Don't throw - continue workflow even if tagging fails
                             }
                         }
                         nextStepIndex++;
@@ -286,11 +314,17 @@ export async function GET(request: Request) {
 
                     } else {
                         // Final Failure
-                        console.error(`Job ${job.id} Permanently Failed.`);
-                        await supabaseAdmin.from('automation_queue').update({
-                            status: 'failed',
-                            error_message: `Final Error: ${jobError.message}`
-                        }).eq('id', job.id);
+                        const failedStepIndex = (typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload)?.step_index || 0;
+                        console.error(`[Cron] Job ${job.id} permanently failed at step ${failedStepIndex}:`, jobError);
+
+                        await supabaseAdmin
+                            .from('automation_queue')
+                            .update({
+                                status: 'failed',
+                                error_message: `Step ${failedStepIndex}: ${jobError.message || 'Unknown error'}`,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', job.id);
                     }
                 }
             } // End Batch For Loop

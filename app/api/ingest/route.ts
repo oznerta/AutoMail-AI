@@ -194,17 +194,110 @@ export async function POST(request: NextRequest) {
                 const targetEvent = triggerConfig?.config?.event || triggerConfig?.value || triggerConfig?.event;
 
                 if (targetEvent === eventName) {
-                    queueItems.push({
-                        automation_id: auto.id,
-                        contact_id: contact.id,
-                        // user_id removed - inferred from automation relation
-                        status: 'pending',
-                        // execute_at removed to use DB default (now())
-                        payload: {
-                            step_index: 0,
-                            event_data: body // Pass full payload to workflow
+                    // Check if first step has 0 delay for instant execution
+                    const firstStep = (auto.workflow_config as any)?.steps?.[0];
+                    const hasInstantFirstStep = firstStep && (firstStep.delay === 0 || firstStep.delay === '0');
+
+                    if (hasInstantFirstStep) {
+                        // Execute first step immediately
+                        console.log(`[Ingest] Instant execution for automation ${auto.id}`);
+
+                        try {
+                            // Import Resend for email sending
+                            const { Resend } = await import('resend');
+
+                            // Fetch user's Resend key
+                            const { data: keyData } = await supabaseAdmin
+                                .from('vault_keys')
+                                .select('encrypted_value')
+                                .eq('user_id', keyRecord.user_id)
+                                .eq('provider', 'resend')
+                                .single();
+
+                            if (keyData && firstStep.type === 'send_email') {
+                                const { decrypt } = await import('@/lib/crypto');
+                                const apiKey = await decrypt(keyData.encrypted_value);
+                                const userResend = new Resend(apiKey);
+
+                                // Replace variables
+                                let htmlContent = String(auto.email_template || "<p>No content</p>");
+                                let subjectLine = String((auto.workflow_config as any)?.subject || `Update from ${auto.name}`);
+
+                                const firstName = contact.first_name || '';
+                                const lastName = contact.last_name || '';
+                                const emailAddr = contact.email || '';
+
+                                htmlContent = htmlContent
+                                    .replace(/{{first_name}}/g, firstName)
+                                    .replace(/{{last_name}}/g, lastName)
+                                    .replace(/{{email}}/g, emailAddr);
+
+                                subjectLine = subjectLine.replace(/{{first_name}}/g, firstName);
+
+                                // Get sender
+                                let senderEmail = 'onboarding@resend.dev';
+                                const senderId = (auto.workflow_config as any)?.sender_id;
+
+                                if (senderId) {
+                                    const { data: senderData } = await supabaseAdmin
+                                        .from('sender_identities')
+                                        .select('email, name')
+                                        .eq('id', senderId)
+                                        .eq('user_id', keyRecord.user_id)
+                                        .single();
+
+                                    if (senderData) {
+                                        senderEmail = `${senderData.name} <${senderData.email}>`;
+                                    }
+                                }
+
+                                await userResend.emails.send({
+                                    from: senderEmail,
+                                    to: emailAddr,
+                                    subject: subjectLine,
+                                    html: htmlContent
+                                });
+
+                                console.log(`[Ingest] Instant email sent to ${emailAddr}`);
+                            }
+
+                            // Queue remaining steps (starting from step 1)
+                            if ((auto.workflow_config as any)?.steps?.length > 1) {
+                                queueItems.push({
+                                    automation_id: auto.id,
+                                    contact_id: contact.id,
+                                    status: 'pending',
+                                    payload: {
+                                        step_index: 1, // Start from step 1
+                                        event_data: body
+                                    }
+                                });
+                            }
+                        } catch (instantError) {
+                            console.error(`[Ingest] Instant execution failed:`, instantError);
+                            // Fallback: queue entire workflow
+                            queueItems.push({
+                                automation_id: auto.id,
+                                contact_id: contact.id,
+                                status: 'pending',
+                                payload: {
+                                    step_index: 0,
+                                    event_data: body
+                                }
+                            });
                         }
-                    });
+                    } else {
+                        // Queue entire workflow for cron
+                        queueItems.push({
+                            automation_id: auto.id,
+                            contact_id: contact.id,
+                            status: 'pending',
+                            payload: {
+                                step_index: 0,
+                                event_data: body
+                            }
+                        });
+                    }
                 }
             }
 
