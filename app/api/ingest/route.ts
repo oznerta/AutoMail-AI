@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
                     queueItems.push({
                         automation_id: auto.id,
                         contact_id: contact.id,
-                        user_id: keyRecord.user_id,
+                        // user_id removed - inferred from automation relation
                         status: 'pending',
                         execute_at: new Date().toISOString(),
                         payload: {

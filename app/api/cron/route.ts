@@ -64,7 +64,7 @@ export async function GET(request: Request) {
                 const queueItems = contacts.map(c => ({
                     automation_id: campaign.id,
                     contact_id: c.id,
-                    user_id: campaign.user_id,
+                    // user_id removed - inferred from automation
                     status: 'pending',
                     execute_at: new Date().toISOString(),
                     payload: { step_index: 0 }
@@ -103,7 +103,8 @@ export async function GET(request: Request) {
                     automations (
                         name,
                         workflow_config,
-                        email_template
+                        email_template,
+                        user_id
                     ),
                     contacts (
                         email,
@@ -135,15 +136,14 @@ export async function GET(request: Request) {
                 }
 
                 try {
-                    const automation = job.automations;
+                    const automation = job.automations as any;
                     const contact = job.contacts;
 
                     // Parse Payload & Steps
                     const payload = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload || {};
                     const currentStepIndex = payload.step_index || 0;
 
-                    const automationData = automation as any;
-                    const steps = automationData.workflow_config?.steps || [];
+                    const steps = automation.workflow_config?.steps || [];
 
                     // Check if completed
                     if (currentStepIndex >= steps.length) {
@@ -165,11 +165,18 @@ export async function GET(request: Request) {
                     }
                     else if (currentStep.type === 'send_email') {
                         if (contact && (contact as any).email) {
-                            // BYOK: Fetch User's Resend Key
+                            // BYOK: Fetch User's Resend Key using relation
+                            const automationObj = Array.isArray(automation) ? automation[0] : automation;
+                            const userId = automationObj?.user_id;
+
+                            if (!userId) {
+                                throw new Error("Could not Resolve User ID from Automation Relation");
+                            }
+
                             const { data: keyData } = await supabaseAdmin
                                 .from('vault_keys')
                                 .select('encrypted_value')
-                                .eq('user_id', job.user_id)
+                                .eq('user_id', userId)
                                 .eq('provider', 'resend')
                                 .single();
 
@@ -181,8 +188,8 @@ export async function GET(request: Request) {
                             const userResend = new Resend(apiKey);
 
                             // Replace Variables
-                            let htmlContent = automationData.email_template || "<p>No content</p>";
-                            let subjectLine = automationData.workflow_config?.subject || `Update from ${automationData.name}`;
+                            let htmlContent = automation.email_template || "<p>No content</p>";
+                            let subjectLine = automation.workflow_config?.subject || `Update from ${automation.name}`;
 
                             const firstName = (contact as any).first_name || '';
                             const lastName = (contact as any).last_name || '';
