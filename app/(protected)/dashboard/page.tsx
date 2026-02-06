@@ -87,8 +87,10 @@ export default async function DashboardPage() {
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100/10 text-[10px] font-bold group-hover:bg-teal-500 group-hover:text-white transition-colors">3</span>
                             <p className="text-sm text-slate-300">Verify your sender domain in Settings to ensure delivery.</p>
                         </div>
-                        <Button variant="secondary" className="w-full mt-2 bg-white/10 hover:bg-white/20 text-white border-0">
-                            View Documentation
+                        <Button asChild variant="secondary" className="w-full mt-2 bg-white/10 hover:bg-white/20 text-white border-0">
+                            <Link href="/docs/guides/quick-start" target="_blank">
+                                View Documentation <ArrowUpRight className="ml-2 h-4 w-4" />
+                            </Link>
                         </Button>
                     </CardContent>
                 </Card>
