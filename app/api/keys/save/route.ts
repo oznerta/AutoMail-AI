@@ -49,14 +49,14 @@ export async function POST(request: Request) {
         const metadataJson = (metadata || {}) as unknown as Json;
 
         // Check for existing key first
-        const { data: existingKey } = await supabase
-            .from('vault_keys')
+        const { data: existingKey } = await (supabase
+            .from('vault_keys') as any)
             .select('id')
             .eq('user_id', user.id)
             .eq('provider', provider)
             .single();
 
-        let dbResult;
+        let dbResult: any;
 
         if (existingKey) {
             // Update existing
