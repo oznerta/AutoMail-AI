@@ -27,7 +27,7 @@ export function StepSenderIdentity({ onNext, onBack }: StepSenderIdentityProps) 
         }
 
         setIsSaving(true);
-        const supabase = createClient();
+        const supabase: any = createClient();
 
         try {
             const { data: { user } } = await supabase.auth.getUser();
