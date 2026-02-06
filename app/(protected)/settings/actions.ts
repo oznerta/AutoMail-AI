@@ -115,3 +115,25 @@ export async function deleteSenderIdentity(id: string) {
     revalidatePath('/settings');
     return { success: true };
 }
+
+export async function deleteAccount() {
+    const supabase = await createClient() as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    try {
+        // Use Admin Client to delete user from Auth
+        const { createAdminClient } = await import("@/utils/supabase/server");
+        const adminAuth = createAdminClient().auth.admin;
+
+        const { error } = await adminAuth.deleteUser(user.id);
+        if (error) throw error;
+
+        // Sign out to clear cookies
+        await supabase.auth.signOut();
+        return { success: true };
+    } catch (error: any) {
+        console.error("Delete Account Error:", error);
+        return { error: error.message || "Failed to delete account" };
+    }
+}

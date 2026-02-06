@@ -24,6 +24,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/utils/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import { updatePassword } from "@/utils/supabase/auth"; // Adding static import for clarity if I change my mind, but dynamic is fine. Actually let's just use dynamic in the code. 
+// Wait, I used dynamic import in the previous tool call.
+// Let's check the Email Update button. It is also likely broken.
+
 
 interface KeyStatus {
     openai: boolean;
@@ -211,6 +215,97 @@ function SettingsContent() {
     const currentTab = searchParams.get('tab') || 'account';
     const [webhookKeys, setWebhookKeys] = useState<any[]>([]);
     const [userEmail, setUserEmail] = useState<string>("");
+    const { toast } = useToast();
+
+    // Password State
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [updatingPassword, setUpdatingPassword] = useState(false);
+
+    // Email State
+    const [newEmail, setNewEmail] = useState("");
+    const [updatingEmail, setUpdatingEmail] = useState(false);
+
+    // Delete State
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDeleteAccount = async () => {
+        if (!confirm("Are you ABSOLUTELY sure? This cannot be undone.")) return;
+
+        setIsDeleting(true);
+        try {
+            const { deleteAccount } = await import("./actions");
+            const res = await deleteAccount();
+            if (res.error) {
+                toast({ title: "Error", description: res.error, variant: "destructive" });
+            } else {
+                toast({ title: "Account Deleted", description: "Your account has been permanently deleted." });
+                router.push("/login");
+            }
+        } catch (e) {
+            toast({ title: "Error", description: "Failed to delete account", variant: "destructive" });
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const handleUpdateEmail = async () => {
+        if (!newEmail) return;
+        setUpdatingEmail(true);
+        try {
+            const supabase = createClient();
+            const { error } = await supabase.auth.updateUser({ email: newEmail });
+            if (error) {
+                toast({ title: "Error", description: error.message, variant: "destructive" });
+            } else {
+                toast({ title: "Check your email", description: "To complete the update, click the confirmation links sent to both your old and new email addresses." });
+                setNewEmail("");
+            }
+        } catch (e) {
+            toast({ title: "Error", description: "Failed to update email", variant: "destructive" });
+        } finally {
+            setUpdatingEmail(false);
+        }
+    };
+
+    // Import this dynamically or at the top. Since it's a client component, standard import is better. 
+    // But I'll rely on the existing imports or add it.
+    // Wait, I need to add the import to the top of the file first.
+    // For now, I will use `fetchData` to get user details.
+
+    const handleUpdatePassword = async () => {
+        if (!newPassword || !confirmPassword) {
+            toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
+            return;
+        }
+        if (newPassword.length < 8) {
+            toast({ title: "Error", description: "Password must be at least 8 characters", variant: "destructive" });
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
+            return;
+        }
+
+        setUpdatingPassword(true);
+        try {
+            // Dynamically import to avoid top-level issues if any
+            const { updatePassword } = await import("@/utils/supabase/auth");
+            const res = await updatePassword(newPassword);
+
+            if (res.error) {
+                toast({ title: "Error", description: res.error.message, variant: "destructive" });
+            } else {
+                toast({ title: "Success", description: "Password updated successfully." });
+                setNewPassword("");
+                setConfirmPassword("");
+            }
+        } catch (e: any) {
+            toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
+        } finally {
+            setUpdatingPassword(false);
+        }
+    };
 
     const fetchData = useCallback(async () => {
         const supabase = createClient();
@@ -305,21 +400,33 @@ function SettingsContent() {
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-4">
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="current-password">Current Password</Label>
-                                            <Input id="current-password" type="password" />
-                                        </div>
+                                        {/* Current password is not strictly needed for Supabase updateUser if logged in, but good for UI flow if re-auth needed. 
+                                            Supabase updateUser doesn't require old password. We'll skip it for now or keep as dummy if needed later. */}
                                         <div className="grid gap-2">
                                             <Label htmlFor="new-password">New Password</Label>
-                                            <Input id="new-password" type="password" />
+                                            <Input
+                                                id="new-password"
+                                                type="password"
+                                                value={newPassword}
+                                                onChange={(e) => setNewPassword(e.target.value)}
+                                            />
+                                            <p className="text-[0.8rem] text-muted-foreground">Min 8 characters.</p>
                                         </div>
                                         <div className="grid gap-2">
                                             <Label htmlFor="confirm-password">Confirm New Password</Label>
-                                            <Input id="confirm-password" type="password" />
+                                            <Input
+                                                id="confirm-password"
+                                                type="password"
+                                                value={confirmPassword}
+                                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                            />
                                         </div>
                                     </CardContent>
                                     <CardFooter className="border-t px-6 py-4">
-                                        <Button>Update Password</Button>
+                                        <Button onClick={handleUpdatePassword} disabled={updatingPassword}>
+                                            {updatingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Update Password
+                                        </Button>
                                     </CardFooter>
                                 </Card>
 
@@ -340,11 +447,21 @@ function SettingsContent() {
                                         </div>
                                         <div className="grid gap-2">
                                             <Label htmlFor="new-email">New Email Address</Label>
-                                            <Input id="new-email" type="email" placeholder="new@example.com" />
+                                            <Input
+                                                id="new-email"
+                                                type="email"
+                                                placeholder="new@example.com"
+                                                value={newEmail}
+                                                onChange={(e) => setNewEmail(e.target.value)}
+                                            />
+                                            <p className="text-[0.8rem] text-muted-foreground">You will need to verify the new email.</p>
                                         </div>
                                     </CardContent>
                                     <CardFooter className="border-t px-6 py-4">
-                                        <Button variant="outline">Update Email</Button>
+                                        <Button variant="outline" onClick={handleUpdateEmail} disabled={updatingEmail}>
+                                            {updatingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Update Email
+                                        </Button>
                                     </CardFooter>
                                 </Card>
 
@@ -368,7 +485,10 @@ function SettingsContent() {
                                         </Alert>
                                     </CardContent>
                                     <CardFooter className="border-t border-destructive/20 px-6 py-4 flex justify-end">
-                                        <Button variant="destructive">Delete Account</Button>
+                                        <Button variant="destructive" onClick={handleDeleteAccount} disabled={isDeleting}>
+                                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                                            {isDeleting ? "Deleting..." : "Delete Account"}
+                                        </Button>
                                     </CardFooter>
                                 </Card>
                             </div>
