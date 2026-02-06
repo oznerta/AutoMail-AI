@@ -220,7 +220,7 @@ export async function GET(request: Request) {
                             const { data: existingTag } = await supabaseAdmin
                                 .from('tags')
                                 .select('id')
-                                .eq('user_id', job.user_id)
+                                .eq('user_id', automation.user_id)
                                 .eq('name', tagName)
                                 .single();
 
@@ -229,7 +229,7 @@ export async function GET(request: Request) {
                             } else {
                                 const { data: newTag } = await supabaseAdmin
                                     .from('tags')
-                                    .insert({ user_id: job.user_id, name: tagName })
+                                    .insert({ user_id: automation.user_id, name: tagName })
                                     .select('id')
                                     .single();
                                 if (newTag) tagId = newTag.id;
