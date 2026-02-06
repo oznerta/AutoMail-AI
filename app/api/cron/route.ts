@@ -95,9 +95,9 @@ export async function GET(request: Request) {
                 break;
             }
 
-            // 2. Fetch Due Jobs (Batch)
+            // 2. Fetch & Claim Due Jobs (Atomic)
             const { data: jobs, error: fetchError } = await supabaseAdmin
-                .from('automation_queue')
+                .rpc('claim_automation_jobs', { batch_size: BATCH_SIZE })
                 .select(`
                     *,
                     automations (
@@ -111,10 +111,7 @@ export async function GET(request: Request) {
                         first_name,
                         last_name
                     )
-                `)
-                .eq('status', 'pending')
-                .lte('execute_at', new Date().toISOString())
-                .limit(BATCH_SIZE);
+                `);
 
             if (fetchError) throw fetchError;
 
@@ -268,10 +265,32 @@ export async function GET(request: Request) {
 
                 } catch (jobError: any) {
                     console.error(`Job ${job.id} Failed:`, jobError);
-                    await supabaseAdmin.from('automation_queue').update({
-                        status: 'failed',
-                        error_message: jobError.message
-                    }).eq('id', job.id);
+
+                    const MAX_RETRIES = 3;
+                    const currentRetry = (job.retry_count || 0) + 1;
+
+                    if (currentRetry <= MAX_RETRIES) {
+                        // Retry with exponential backoff (1m, 5m, 15m)
+                        const delayMinutes = Math.pow(5, currentRetry - 1);
+                        const nextRetryAt = addTime(new Date(), delayMinutes, 'minutes');
+
+                        console.log(`Retrying job ${job.id} (Attempt ${currentRetry}/${MAX_RETRIES}) in ${delayMinutes}m`);
+
+                        await supabaseAdmin.from('automation_queue').update({
+                            status: 'pending',
+                            retry_count: currentRetry,
+                            execute_at: nextRetryAt.toISOString(),
+                            error_message: `Attempt ${currentRetry}: ${jobError.message}`
+                        }).eq('id', job.id);
+
+                    } else {
+                        // Final Failure
+                        console.error(`Job ${job.id} Permanently Failed.`);
+                        await supabaseAdmin.from('automation_queue').update({
+                            status: 'failed',
+                            error_message: `Final Error: ${jobError.message}`
+                        }).eq('id', job.id);
+                    }
                 }
             } // End Batch For Loop
         } // End While Loop

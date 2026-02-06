@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
                         contact_id: contact.id,
                         // user_id removed - inferred from automation relation
                         status: 'pending',
-                        execute_at: new Date().toISOString(),
+                        // execute_at removed to use DB default (now())
                         payload: {
                             step_index: 0,
                             event_data: body // Pass full payload to workflow
