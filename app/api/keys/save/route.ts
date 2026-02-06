@@ -44,26 +44,51 @@ export async function POST(request: Request) {
         // We encrypt the key server-side before storing it
         const encryptedData = await encrypt(key);
 
-        // 4. Store in Database
-        // Cast to unknown then Json to satisfy strict type checking
+        // 4. Store in Database (Upsert Logic)
         const encryptedJson = encryptedData as unknown as Json;
         const metadataJson = (metadata || {}) as unknown as Json;
 
-        // Note: We don't verify the key with the provider here (that's a separate step/endpoint)
-        // We just securely store it.
-        // Explicitly cast to any to avoid recursive type depth issues with Supabase definitions
-        const { data, error: dbError } = await (supabase
-            .from('vault_keys') as any)
-            .insert({
-                user_id: user.id,
-                provider,
-                key_name: key_name || `${provider} Key`,
-                encrypted_value: encryptedJson,
-                metadata: metadataJson,
-                is_active: true,
-            })
+        // Check for existing key first
+        const { data: existingKey } = await supabase
+            .from('vault_keys')
             .select('id')
+            .eq('user_id', user.id)
+            .eq('provider', provider)
             .single();
+
+        let dbResult;
+
+        if (existingKey) {
+            // Update existing
+            dbResult = await (supabase
+                .from('vault_keys') as any)
+                .update({
+                    encrypted_value: encryptedJson,
+                    key_name: key_name || `${provider} Key`,
+                    metadata: metadataJson,
+                    is_active: true,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', existingKey.id)
+                .select('id')
+                .single();
+        } else {
+            // Insert new
+            dbResult = await (supabase
+                .from('vault_keys') as any)
+                .insert({
+                    user_id: user.id,
+                    provider,
+                    key_name: key_name || `${provider} Key`,
+                    encrypted_value: encryptedJson,
+                    metadata: metadataJson,
+                    is_active: true,
+                })
+                .select('id')
+                .single();
+        }
+
+        const { data, error: dbError } = dbResult;
 
         if (dbError) {
             console.error('Database Error:', dbError);
