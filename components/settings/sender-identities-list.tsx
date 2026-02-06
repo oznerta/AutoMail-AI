@@ -19,6 +19,16 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function SenderIdentitiesList({ senders, onUpdate }: { senders: any[], onUpdate?: () => void }) {
     const [isAdding, setIsAdding] = useState(false);
@@ -26,6 +36,7 @@ export function SenderIdentitiesList({ senders, onUpdate }: { senders: any[], on
     const [newEmail, setNewEmail] = useState("");
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
+    const [senderToDelete, setSenderToDelete] = useState<string | null>(null);
     const { toast } = useToast();
 
     const handleAdd = async () => {
@@ -36,7 +47,7 @@ export function SenderIdentitiesList({ senders, onUpdate }: { senders: any[], on
             if (res.error) {
                 toast({ title: "Error", description: res.error, variant: "destructive" });
             } else {
-                toast({ title: "Success", description: "Sender added successfully." });
+                toast({ title: "Success", description: "Sender added successfully.", variant: "success" });
                 setOpen(false);
                 setNewName("");
                 setNewEmail("");
@@ -49,11 +60,12 @@ export function SenderIdentitiesList({ senders, onUpdate }: { senders: any[], on
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("Remove this sender?")) return;
+    const handleDeleteConfirm = async () => {
+        if (!senderToDelete) return;
         try {
-            await deleteSenderIdentity(id);
+            await deleteSenderIdentity(senderToDelete);
             toast({ title: "Deleted", description: "Sender removed." });
+            setSenderToDelete(null);
             if (onUpdate) onUpdate();
         } catch (e) {
             toast({ title: "Error", description: "Failed to delete.", variant: "destructive" });
@@ -140,7 +152,7 @@ export function SenderIdentitiesList({ senders, onUpdate }: { senders: any[], on
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(sender.id)}>
+                                        <Button variant="ghost" size="icon" onClick={() => setSenderToDelete(sender.id)}>
                                             <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                                         </Button>
                                     </TableCell>
@@ -149,6 +161,23 @@ export function SenderIdentitiesList({ senders, onUpdate }: { senders: any[], on
                         )}
                     </TableBody>
                 </Table>
+
+                <AlertDialog open={!!senderToDelete} onOpenChange={(open) => !open && setSenderToDelete(null)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Remove Sender?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will remove this sender identity. You will not be able to send emails from this address until you add it again.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">
+                                Remove Sender
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </CardContent>
         </Card>
     );

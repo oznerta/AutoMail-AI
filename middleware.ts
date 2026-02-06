@@ -72,7 +72,7 @@ export async function middleware(request: NextRequest) {
             request.nextUrl.pathname === '/signup') &&
         user
     ) {
-        return NextResponse.redirect(new URL('/contacts', request.url))
+        return NextResponse.redirect(new URL('/dashboard', request.url))
     }
 
     return response

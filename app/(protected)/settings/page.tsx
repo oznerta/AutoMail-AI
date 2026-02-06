@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { WebhookKeysList } from "@/components/settings/webhook-keys-list";
 import { SenderIdentitiesList } from "@/components/settings/sender-identities-list";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { createClient } from "@/utils/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -106,10 +107,10 @@ function BYOKConfigTab() {
     };
 
     return (
-        <Card>
+        <Card className="border-muted/60 shadow-md bg-gradient-to-br from-card to-muted/20">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                    <KeyRound className="h-5 w-5" />
+                    <KeyRound className="h-5 w-5 text-primary" />
                     API Keys
                 </CardTitle>
                 <CardDescription>
@@ -197,6 +198,13 @@ function BYOKConfigTab() {
     );
 }
 
+const TABS = [
+    { id: 'account', label: 'Account Security', icon: ShieldAlert },
+    { id: 'byok', label: 'BYOK Config', icon: KeyRound },
+    { id: 'senders', label: 'Senders', icon: Mail },
+    { id: 'dev', label: 'Developers', icon: Terminal },
+]
+
 function SettingsContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -237,164 +245,151 @@ function SettingsContent() {
     };
 
     return (
-        <div className="flex flex-col gap-6 w-full max-w-full">
+        <div className="flex flex-col gap-8 w-full max-w-full">
             <div>
-                <h1 className="text-lg font-semibold md:text-2xl">Settings</h1>
-                <p className="text-sm text-muted-foreground">
-                    Manage your account settings and configurations.
+                <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">Settings</h1>
+                <p className="text-muted-foreground mt-1">
+                    Manage your preferences and configurations.
                 </p>
             </div>
 
-            {/* Custom Tabs */}
-            <div className="flex w-full items-center border-b overflow-x-auto">
-                <button
-                    onClick={() => setActiveTab('account')}
-                    className={cn(
-                        "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors hover:text-foreground whitespace-nowrap",
-                        currentTab === 'account'
-                            ? "border-primary text-foreground"
-                            : "border-transparent text-muted-foreground"
-                    )}
-                >
-                    <ShieldAlert className="h-4 w-4" />
-                    Account Security
-                </button>
-                <button
-                    onClick={() => setActiveTab('byok')}
-                    className={cn(
-                        "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors hover:text-foreground whitespace-nowrap",
-                        currentTab === 'byok'
-                            ? "border-primary text-foreground"
-                            : "border-transparent text-muted-foreground"
-                    )}
-                >
-                    <KeyRound className="h-4 w-4" />
-                    BYOK Config
-                </button>
-                <button
-                    onClick={() => setActiveTab('senders')}
-                    className={cn(
-                        "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors hover:text-foreground whitespace-nowrap",
-                        currentTab === 'senders'
-                            ? "border-primary text-foreground"
-                            : "border-transparent text-muted-foreground"
-                    )}
-                >
-                    <Mail className="h-4 w-4" />
-                    Senders
-                </button>
-                <button
-                    onClick={() => setActiveTab('dev')}
-                    className={cn(
-                        "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors hover:text-foreground whitespace-nowrap",
-                        currentTab === 'dev'
-                            ? "border-primary text-foreground"
-                            : "border-transparent text-muted-foreground"
-                    )}
-                >
-                    <Terminal className="h-4 w-4" />
-                    Developers
-                </button>
+            {/* Custom Animated Tabs */}
+            <div className="flex w-full items-center border-b overflow-x-auto gap-6 pb-px">
+                {TABS.map((tab) => {
+                    const isActive = currentTab === tab.id;
+                    const Icon = tab.icon;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={cn(
+                                "relative flex items-center gap-2 px-1 py-4 text-sm font-medium transition-colors hover:text-foreground/80 outline-none select-none",
+                                isActive ? "text-foreground" : "text-muted-foreground"
+                            )}
+                        >
+                            <Icon className="h-4 w-4" />
+                            {tab.label}
+                            {isActive && (
+                                <motion.div
+                                    layoutId="activeTab"
+                                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"
+                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                />
+                            )}
+                        </button>
+                    )
+                })}
             </div>
 
             <div className="grid gap-6">
-                {/* Account Tab (Security & Danger Zone) */}
-                {currentTab === 'account' && (
-                    <div className="space-y-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Lock className="h-5 w-5" />
-                                    Security
-                                </CardTitle>
-                                <CardDescription>
-                                    Update your password and account security settings.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="current-password">Current Password</Label>
-                                    <Input id="current-password" type="password" />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="new-password">New Password</Label>
-                                    <Input id="new-password" type="password" />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="confirm-password">Confirm New Password</Label>
-                                    <Input id="confirm-password" type="password" />
-                                </div>
-                            </CardContent>
-                            <CardFooter className="border-t px-6 py-4">
-                                <Button>Update Password</Button>
-                            </CardFooter>
-                        </Card>
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={currentTab}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="w-full"
+                    >
+                        {/* Account Tab (Security & Danger Zone) */}
+                        {currentTab === 'account' && (
+                            <div className="space-y-6">
+                                <Card className="border-muted/60 shadow-sm">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Lock className="h-5 w-5 text-primary" />
+                                            Security
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Update your password and account security settings.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="current-password">Current Password</Label>
+                                            <Input id="current-password" type="password" />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="new-password">New Password</Label>
+                                            <Input id="new-password" type="password" />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="confirm-password">Confirm New Password</Label>
+                                            <Input id="confirm-password" type="password" />
+                                        </div>
+                                    </CardContent>
+                                    <CardFooter className="border-t px-6 py-4">
+                                        <Button>Update Password</Button>
+                                    </CardFooter>
+                                </Card>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Mail className="h-5 w-5" />
-                                    Email Address
-                                </CardTitle>
-                                <CardDescription>
-                                    Update your primary email address.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="email">Current Email</Label>
-                                    <Input id="email" type="email" value={userEmail || "Loading..."} disabled />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="new-email">New Email Address</Label>
-                                    <Input id="new-email" type="email" placeholder="new@example.com" />
-                                </div>
-                            </CardContent>
-                            <CardFooter className="border-t px-6 py-4">
-                                <Button variant="outline">Update Email</Button>
-                            </CardFooter>
-                        </Card>
+                                <Card className="border-muted/60 shadow-sm">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Mail className="h-5 w-5 text-primary" />
+                                            Email Address
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Update your primary email address.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="email">Current Email</Label>
+                                            <Input id="email" type="email" value={userEmail || "Loading..."} disabled className="bg-muted" />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="new-email">New Email Address</Label>
+                                            <Input id="new-email" type="email" placeholder="new@example.com" />
+                                        </div>
+                                    </CardContent>
+                                    <CardFooter className="border-t px-6 py-4">
+                                        <Button variant="outline">Update Email</Button>
+                                    </CardFooter>
+                                </Card>
 
-                        <Card className="border-destructive/50 bg-destructive/5">
-                            <CardHeader>
-                                <CardTitle className="text-destructive flex items-center gap-2">
-                                    <Trash2 className="h-5 w-5" />
-                                    Danger Zone
-                                </CardTitle>
-                                <CardDescription className="text-destructive/80">
-                                    Permanently delete your account and all associated data. This action cannot be undone.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
-                                    <ShieldAlert className="h-4 w-4" />
-                                    <AlertTitle>Warning</AlertTitle>
-                                    <AlertDescription>
-                                        Deleting your account will remove: All contacts, Automations, API configurations, and History.
-                                    </AlertDescription>
-                                </Alert>
-                            </CardContent>
-                            <CardFooter className="border-t border-destructive/20 px-6 py-4 flex justify-end">
-                                <Button variant="destructive">Delete Account</Button>
-                            </CardFooter>
-                        </Card>
-                    </div>
-                )}
+                                <Card className="border-destructive/30 bg-destructive/5 shadow-sm">
+                                    <CardHeader>
+                                        <CardTitle className="text-destructive flex items-center gap-2">
+                                            <Trash2 className="h-5 w-5" />
+                                            Danger Zone
+                                        </CardTitle>
+                                        <CardDescription className="text-destructive/80">
+                                            Permanently delete your account and all associated data. This action cannot be undone.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+                                            <ShieldAlert className="h-4 w-4" />
+                                            <AlertTitle>Warning</AlertTitle>
+                                            <AlertDescription>
+                                                Deleting your account will remove: All contacts, Automations, API configurations, and History.
+                                            </AlertDescription>
+                                        </Alert>
+                                    </CardContent>
+                                    <CardFooter className="border-t border-destructive/20 px-6 py-4 flex justify-end">
+                                        <Button variant="destructive">Delete Account</Button>
+                                    </CardFooter>
+                                </Card>
+                            </div>
+                        )}
 
-                {/* BYOK Config Tab */}
-                {currentTab === 'byok' && (
-                    <BYOKConfigTab />
-                )}
+                        {/* BYOK Config Tab */}
+                        {currentTab === 'byok' && (
+                            <BYOKConfigTab />
+                        )}
 
-                {/* Developers Tab */}
-                {currentTab === 'dev' && (
-                    <WebhookKeysList keys={webhookKeys} />
-                )}
+                        {/* Developers Tab */}
+                        {currentTab === 'dev' && (
+                            <WebhookKeysList keys={webhookKeys} />
+                        )}
 
-                {/* Senders Tab */}
-                {currentTab === 'senders' && (
-                    <SenderIdentitiesList senders={webhookKeys} onUpdate={fetchData} />
-                )}
+                        {/* Senders Tab */}
+                        {currentTab === 'senders' && (
+                            <SenderIdentitiesList senders={webhookKeys} onUpdate={fetchData} />
+                        )}
+                    </motion.div>
+                </AnimatePresence>
             </div>
         </div>
     );

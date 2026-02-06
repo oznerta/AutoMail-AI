@@ -9,7 +9,7 @@ const TagSchema = z.object({
 // GET - List all tags
 export async function GET() {
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -29,7 +29,7 @@ export async function GET() {
 // POST - Create tag
 export async function POST(request: Request) {
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 // DELETE - Delete tag
 export async function DELETE(request: Request) {
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -84,7 +84,7 @@ export async function DELETE(request: Request) {
 // PATCH - Rename tag
 export async function PATCH(request: Request) {
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

@@ -110,7 +110,8 @@ export async function GET(request: Request) {
                         id,
                         email,
                         first_name,
-                        last_name
+                        last_name,
+                        company
                     )
                 `);
 
@@ -198,21 +199,20 @@ export async function GET(request: Request) {
                                 throw new Error(`Template fetch failed: ${templateError?.message || 'Template not found'}`);
                             }
 
+                            // Import shared processor
+                            const { processEmailContent } = await import('@/utils/email-processor');
+
                             // Replace Variables
-                            let htmlContent = String(template.content || "<p>No content</p>");
-                            let subjectLine = String(template.subject || "Update");
+                            const variables: Record<string, string> = {
+                                email: (contact as any).email || '',
+                                first_name: (contact as any).first_name || '',
+                                last_name: (contact as any).last_name || '',
+                                company: (contact as any).company || '',
+                                // Add more vars as schema expands
+                            };
 
-                            const firstName = (contact as any).first_name || '';
-                            const lastName = (contact as any).last_name || '';
-                            const email = (contact as any).email || '';
-
-                            htmlContent = htmlContent
-                                .replace(/{{first_name}}/g, firstName)
-                                .replace(/{{last_name}}/g, lastName)
-                                .replace(/{{email}}/g, email);
-
-                            // Simple subject replacement
-                            subjectLine = subjectLine.replace(/{{first_name}}/g, firstName);
+                            const htmlContent = processEmailContent(template.content || "<p>No content</p>", variables);
+                            const subjectLine = processEmailContent(template.subject || "Update", variables);
 
                             // Dynamic Sender Configuration from step config
                             let senderEmail = 'onboarding@resend.dev'; // Fallback
@@ -232,6 +232,7 @@ export async function GET(request: Request) {
                             }
 
                             try {
+                                const email = variables.email;
                                 const emailResult = await userResend.emails.send({
                                     from: senderEmail,
                                     to: email,
@@ -280,6 +281,34 @@ export async function GET(request: Request) {
                                             tag_id: tagId
                                         }, { onConflict: 'contact_id, tag_id' });
                                     console.log(`[Cron] Added tag '${tagName}' to contact ${(contact as any).email}`);
+
+                                    // RECURSIVE TRIGGER: Tag Added
+                                    const { data: tagAutomations } = await supabaseAdmin
+                                        .from("automations")
+                                        .select("*")
+                                        .eq("user_id", automation.user_id)
+                                        .eq("status", "active")
+                                        .eq("trigger_type", "tag_added");
+
+                                    if (tagAutomations && tagAutomations.length > 0) {
+                                        const recursiveQueue = [];
+                                        for (const auto of tagAutomations) {
+                                            const triggerConfig = (auto.workflow_config as any)?.trigger;
+                                            const targetTag = triggerConfig?.config?.tag || triggerConfig?.tag_filter || triggerConfig?.tag;
+                                            if (!targetTag || targetTag === tagName) {
+                                                recursiveQueue.push({
+                                                    automation_id: auto.id,
+                                                    contact_id: (contact as any).id,
+                                                    status: 'pending',
+                                                    payload: { step_index: 0, trigger_data: { tag: tagName } }
+                                                });
+                                            }
+                                        }
+                                        if (recursiveQueue.length > 0) {
+                                            await supabaseAdmin.from("automation_queue").insert(recursiveQueue);
+                                            console.log(`[Cron] Chained ${recursiveQueue.length} workflows from tag '${tagName}'`);
+                                        }
+                                    }
                                 }
                             } catch (tagError: any) {
                                 console.error(`[Cron] Tag operation failed for '${tagName}':`, tagError);

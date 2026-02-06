@@ -7,13 +7,14 @@ export const metadata = {
 }
 
 interface PageProps {
-    params: {
+    params: Promise<{
         id: string
-    }
+    }>
 }
 
 export default async function EditTemplatePage({ params }: PageProps) {
-    const template = await getTemplate(params.id)
+    const { id } = await params
+    const template = await getTemplate(id)
 
     if (!template) {
         notFound()

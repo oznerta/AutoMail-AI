@@ -10,7 +10,7 @@ const CreateDefinitionSchema = z.object({
 // GET - List all definitions for user
 export async function GET() {
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
 
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -34,7 +34,7 @@ export async function GET() {
 // POST - Create new definition
 export async function POST(request: Request) {
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
 
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 // DELETE - Remove definition (Cascade deletes values)
 export async function DELETE(request: Request) {
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

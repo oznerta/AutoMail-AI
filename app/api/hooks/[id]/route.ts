@@ -16,9 +16,10 @@ const supabaseAdmin = createClient(
 
 export async function POST(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id: automationId } = await params;
         const { searchParams } = new URL(request.url);
         const token = searchParams.get('token');
 
@@ -30,7 +31,7 @@ export async function POST(
         const { data: automation, error: authError } = await supabaseAdmin
             .from('automations')
             .select('id, user_id, status')
-            .eq('id', params.id)
+            .eq('id', automationId)
             .eq('webhook_token', token)
             .single();
 

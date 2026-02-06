@@ -34,7 +34,7 @@ export default async function AutomationsPage() {
                     <Card key={automation.id} className={cn("flex flex-col transition-opacity", automation.status === 'paused' && "opacity-80")}>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <Badge variant={automation.status === 'active' ? 'default' : 'secondary'}>
-                                {automation.status === 'active' ? 'Active' : (automation.status === 'paused' ? 'Paused' : 'Draft')}
+                                {automation.status === 'active' ? 'Active' : (automation.status === 'paused' ? 'Paused' : 'Inactive')}
                             </Badge>
                             {/* <Clock className="w-4 h-4 text-muted-foreground" /> */}
                         </CardHeader>
@@ -52,7 +52,7 @@ export default async function AutomationsPage() {
                             <div className="mt-4 flex flex-col gap-2">
                                 <div className="text-xs bg-muted p-2 rounded flex justify-between">
                                     <span>Trigger:</span>
-                                    <span className="font-mono">{automation.trigger_type || "Not Configured"}</span>
+                                    <span className="font-mono">{automation.trigger_type === 'manual' ? 'Not Configured' : (automation.trigger_type || "Not Configured")}</span>
                                 </div>
                             </div>
                         </CardContent>

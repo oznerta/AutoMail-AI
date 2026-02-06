@@ -21,6 +21,16 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +48,7 @@ export function CampaignList({ initialCampaigns }: { initialCampaigns: Campaign[
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     const [newName, setNewName] = useState("");
+    const [campaignToDelete, setCampaignToDelete] = useState<string | null>(null);
     const { toast } = useToast();
     const router = useRouter();
 
@@ -57,13 +68,16 @@ export function CampaignList({ initialCampaigns }: { initialCampaigns: Campaign[
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure? This cannot be undone.")) return;
+    const handleDeleteConfirm = async () => {
+        if (!campaignToDelete) return;
         try {
-            await deleteCampaign(id);
-            setCampaigns(campaigns.filter(c => c.id !== id));
+            await deleteCampaign(campaignToDelete);
+            setCampaigns(campaigns.filter(c => c.id !== campaignToDelete));
+            setCampaignToDelete(null);
+            toast({ title: "Deleted", description: "Campaign removed." });
         } catch (error) {
             console.error(error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to delete campaign." });
         }
     };
 
@@ -157,7 +171,7 @@ export function CampaignList({ initialCampaigns }: { initialCampaigns: Campaign[
                                                     <DropdownMenuItem onClick={() => router.push(`/campaigns/${campaign.id}`)}>
                                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(campaign.id)}>
+                                                    <DropdownMenuItem className="text-destructive" onClick={() => setCampaignToDelete(campaign.id)}>
                                                         <Trash2 className="mr-2 h-4 w-4" /> Delete
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -170,6 +184,23 @@ export function CampaignList({ initialCampaigns }: { initialCampaigns: Campaign[
                     </TableBody>
                 </Table>
             </div>
+
+            <AlertDialog open={!!campaignToDelete} onOpenChange={(open) => !open && setCampaignToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Campaign?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete this campaign and all of its data. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">
+                            Delete Campaign
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

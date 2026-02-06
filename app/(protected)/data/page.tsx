@@ -17,6 +17,16 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from '@/lib/utils';
 import { AlertCircle, Tag as TagIcon, Database as DatabaseIcon } from 'lucide-react';
@@ -95,6 +105,7 @@ function TagsManager({ toast }: { toast: any }) {
     const [isSaving, setIsSaving] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
+    const [tagToDelete, setTagToDelete] = useState<{ id: string, name: string } | null>(null);
 
     const fetchTags = async () => {
         try {
@@ -136,12 +147,14 @@ function TagsManager({ toast }: { toast: any }) {
         }
     };
 
-    const handleDelete = async (id: string, name: string) => {
-        if (!confirm(`Delete tag "${name}"? This removes it from all contacts.`)) return;
+    const handleDeleteConfirm = async () => {
+        if (!tagToDelete) return;
+        const { id, name } = tagToDelete;
         try {
             await fetch(`/api/tags?id=${id}`, { method: 'DELETE' });
             setTags(tags.filter(t => t.id !== id));
             toast({ title: 'Tag Deleted', description: `Tag "${name}" removed.` });
+            setTagToDelete(null);
         } catch (error) {
             toast({ title: 'Error', description: 'Failed to delete tag.', variant: 'destructive' });
         }
@@ -242,7 +255,7 @@ function TagsManager({ toast }: { toast: any }) {
                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => startEdit(tag)}>
                                                 <Edit2 className="h-3.5 w-3.5" />
                                             </Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(tag.id, tag.name)}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setTagToDelete(tag)}>
                                                 <Trash2 className="h-3.5 w-3.5" />
                                             </Button>
                                         </div>
@@ -252,6 +265,23 @@ function TagsManager({ toast }: { toast: any }) {
                         ))}
                     </div>
                 )}
+
+                <AlertDialog open={!!tagToDelete} onOpenChange={(open) => !open && setTagToDelete(null)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Tag?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Are you sure you want to delete &quot;{tagToDelete?.name}&quot;? This will remove it from all contacts.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">
+                                Delete Tag
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </CardContent>
         </Card>
     );
@@ -266,6 +296,7 @@ function CustomFieldsManager({ toast }: { toast: any }) {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [newFieldName, setNewFieldName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [fieldToDelete, setFieldToDelete] = useState<{ id: string, name: string } | null>(null);
 
     const fetchFields = async () => {
         try {
@@ -307,12 +338,14 @@ function CustomFieldsManager({ toast }: { toast: any }) {
         }
     };
 
-    const handleDelete = async (id: string, name: string) => {
-        if (!confirm(`Delete field "${name}"? \n\nWARNING: This will delete the value of "${name}" for ALL contacts. This cannot be undone.`)) return;
+    const handleDeleteConfirm = async () => {
+        if (!fieldToDelete) return;
+        const { id, name } = fieldToDelete;
         try {
             await fetch(`/api/data/definitions?id=${id}`, { method: 'DELETE' });
             setFields(fields.filter(f => f.id !== id));
             toast({ title: 'Field Deleted', description: `Field definition "${name}" removed.` });
+            setFieldToDelete(null);
         } catch (error) {
             toast({ title: 'Error', description: 'Failed to delete field.', variant: 'destructive' });
         }
@@ -380,7 +413,7 @@ function CustomFieldsManager({ toast }: { toast: any }) {
                                     variant="ghost"
                                     size="sm"
                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={() => handleDelete(field.id, field.name)}
+                                    onClick={() => setFieldToDelete(field)}
                                 >
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -388,6 +421,24 @@ function CustomFieldsManager({ toast }: { toast: any }) {
                         ))}
                     </div>
                 )}
+
+                <AlertDialog open={!!fieldToDelete} onOpenChange={(open) => !open && setFieldToDelete(null)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Custom Field?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Are you sure you want to delete &quot;{fieldToDelete?.name}&quot;? <br /><br />
+                                <span className="font-bold text-destructive">WARNING:</span> This will delete the value of &quot;{fieldToDelete?.name}&quot; for ALL contacts. This cannot be undone.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">
+                                Delete Field
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </CardContent>
         </Card>
     );

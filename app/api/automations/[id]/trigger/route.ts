@@ -3,10 +3,10 @@ import { createAdminClient, createClient } from "@/utils/supabase/server";
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     // 1. Validate Automation ID
-    const automationId = params.id;
+    const { id: automationId } = await params;
     if (!automationId) {
         return NextResponse.json({ error: "Automation ID required" }, { status: 400 });
     }
@@ -23,7 +23,7 @@ export async function POST(
     // 3. Authenticate User (Secure Trigger)
     // Triggers via this endpoint are manual (dashboard) and require Auth.
     // For public webhooks, use /api/hooks/[id]?token=...
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {

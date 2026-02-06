@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, use } from "react"
 import { useRouter } from "next/navigation"
 import { Automation, updateAutomation, getAutomation, generateWebhookToken } from "../actions"
 import { getSenderIdentities } from "../../settings/actions"
@@ -25,7 +25,7 @@ import { Separator } from "@/components/ui/separator"
 
 // Types for our local state
 type TriggerConfig = {
-    type: 'manual' | 'contact_added' | 'tag_added' | 'webhook_received' | 'event';
+    type: '' | 'contact_added' | 'tag_added' | 'webhook_received' | 'event';
     config: any;
 }
 
@@ -35,11 +35,12 @@ type Step = {
     config: any;
 }
 
-export default function AutomationEditorPage({ params }: { params: { id: string } }) {
+export default function AutomationEditorPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = use(params)
     const [automation, setAutomation] = useState<Automation | null>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
-    const [trigger, setTrigger] = useState<TriggerConfig>({ type: 'manual', config: {} })
+    const [trigger, setTrigger] = useState<TriggerConfig>({ type: '', config: {} })
     const [steps, setSteps] = useState<Step[]>([])
     const [availableTags, setAvailableTags] = useState<string[]>([])
     const [senders, setSenders] = useState<any[]>([])
@@ -51,12 +52,12 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
     useEffect(() => {
         const load = async () => {
             try {
-                const data = await getAutomation(params.id)
+                const data = await getAutomation(id)
                 if (data) {
                     setAutomation(data)
                     // Initialize local state from DB JSON
                     if (data.workflow_config) {
-                        setTrigger(data.workflow_config.trigger || { type: 'manual', config: {} })
+                        setTrigger(data.workflow_config.trigger || { type: '', config: {} })
                         setSteps(data.workflow_config.steps || [])
                     }
                 }
@@ -81,7 +82,7 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
             }
         }
         load()
-    }, [params.id])
+    }, [id])
 
     const handleSave = async () => {
         if (!automation) return
@@ -243,8 +244,7 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
                                         <SelectValue placeholder="Select Trigger" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="manual">Manual / Draft</SelectItem>
-                                        <SelectItem value="contact_added">Contact Created</SelectItem>
+                                        <SelectItem value="contact_added">Contact Added</SelectItem>
                                         <SelectItem value="tag_added">Tag Added</SelectItem>
                                         <SelectItem value="event">API Event (Ingest)</SelectItem>
                                         <SelectItem value="webhook_received">Webhook Received ⚡</SelectItem>

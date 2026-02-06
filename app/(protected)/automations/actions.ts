@@ -32,7 +32,7 @@ const UpdateAutomationSchema = z.object({
 // --- Actions ---
 
 export async function getAutomations(): Promise<Automation[]> {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return [];
@@ -52,7 +52,7 @@ export async function getAutomations(): Promise<Automation[]> {
 }
 
 export async function getAutomation(id: string): Promise<Automation | null> {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return null;
@@ -69,7 +69,7 @@ export async function getAutomation(id: string): Promise<Automation | null> {
 }
 
 export async function createAutomation(name: string) {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return { error: "Unauthorized" };
@@ -88,7 +88,7 @@ export async function createAutomation(name: string) {
             user_id: user.id,
             name: validated.data.name,
             status: 'draft',
-            trigger_type: 'manual', // Default, user can change later
+            trigger_type: null, // Default to null so user is forced to pick one
             workflow_config: { trigger: {}, steps: [] },
             email_template: {},
             webhook_token: webhookToken // Store the token
@@ -106,7 +106,7 @@ export async function createAutomation(name: string) {
 }
 
 export async function updateAutomation(id: string, updates: any) {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return { error: "Unauthorized" };
@@ -136,7 +136,7 @@ export async function updateAutomation(id: string, updates: any) {
 }
 
 export async function deleteAutomation(id: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return { error: "Unauthorized" };
@@ -157,7 +157,7 @@ export async function deleteAutomation(id: string) {
 }
 
 export async function getAvailableTags(): Promise<string[]> {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return [];
@@ -177,7 +177,7 @@ export async function getAvailableTags(): Promise<string[]> {
 }
 
 export async function generateWebhookToken(id: string) {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return { error: "Unauthorized" };

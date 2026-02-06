@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { decrypt } from "@/lib/crypto";
 
 export async function createWebhookKey(name: string) {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Unauthorized" };
 
@@ -32,7 +32,7 @@ export async function createWebhookKey(name: string) {
 }
 
 export async function revokeWebhookKey(id: string) {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { error } = await supabase.from('webhook_keys').delete().eq('id', id);
 
     if (error) return { error: error.message };
@@ -43,7 +43,7 @@ export async function revokeWebhookKey(id: string) {
 // --- Sender Identity Actions ---
 
 export async function getSenderIdentities() {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
@@ -52,7 +52,7 @@ export async function getSenderIdentities() {
 }
 
 export async function addSenderIdentity(name: string, email: string) {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Unauthorized" };
 
@@ -109,7 +109,7 @@ export async function addSenderIdentity(name: string, email: string) {
 }
 
 export async function deleteSenderIdentity(id: string) {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { error } = await supabase.from('sender_identities').delete().eq('id', id);
     if (error) return { error: error.message };
     revalidatePath('/settings');

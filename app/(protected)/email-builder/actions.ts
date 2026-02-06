@@ -25,7 +25,7 @@ const GenerateContentSchema = z.object({
 // --- Actions ---
 
 export async function getTemplates() {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return [];
@@ -52,7 +52,7 @@ export type ActionState = {
 }
 
 export async function createTemplate(name: string): Promise<ActionState & { id?: string }> {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
 
     // 1. Auth Check
     const { data: { user } } = await supabase.auth.getUser();
@@ -94,7 +94,7 @@ export async function createTemplate(name: string): Promise<ActionState & { id?:
 }
 
 export async function deleteTemplate(id: string): Promise<ActionState> {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Unauthorized" };
 
@@ -118,7 +118,7 @@ export async function deleteTemplate(id: string): Promise<ActionState> {
 }
 
 export async function getTemplate(id: string) {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
@@ -134,7 +134,7 @@ export async function getTemplate(id: string) {
 }
 
 export async function updateTemplate(id: string, updates: any): Promise<ActionState> {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Unauthorized" };
 
@@ -182,7 +182,7 @@ export async function generateEmailContent(
     model: string = "gpt-5.2",
     currentContent?: string
 ): Promise<ActionState & { content?: string }> {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return { error: "Unauthorized" };
@@ -274,7 +274,7 @@ CRITICAL RULES:
 }
 
 export async function getSenderIdentities() {
-    const supabase = createClient() as any;
+    const supabase = await createClient() as any;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return [];

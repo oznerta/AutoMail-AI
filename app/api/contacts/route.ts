@@ -5,7 +5,7 @@ import { z } from 'zod';
 // GET - List all contacts for the authenticated user
 export async function GET() {
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
 
         const {
             data: { user },
@@ -94,7 +94,7 @@ const CreateContactSchema = z.object({
 
 export async function POST(request: Request) {
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
 
         const {
             data: { user },
@@ -218,6 +218,157 @@ export async function POST(request: Request) {
                             value: value
                         });
                 }
+            }
+        }
+
+        // =================================================================
+        // 4. Trigger "Contact Added" Automations
+        // =================================================================
+        const { data: automations } = await supabase
+            .from("automations")
+            .select("*")
+            .eq("user_id", user.id)
+            .eq("status", "active")
+            .eq("trigger_type", "contact_added");
+
+        if (automations && automations.length > 0) {
+            const queueItems: any[] = [];
+
+            for (const auto of (automations as any[])) {
+                // Check if first step should execute instantly (Welcome emails etc)
+                const firstStep = (auto.workflow_config as any)?.steps?.[0];
+                const shouldExecuteInstantly = firstStep && (firstStep.type === 'send_email' || firstStep.type === 'add_tag');
+
+                if (shouldExecuteInstantly) {
+                    try {
+                        console.log(`[CreateContact] Instant execution for automation ${auto.id}`);
+
+                        if (firstStep.type === 'send_email') {
+                            const { Resend } = await import('resend');
+
+                            // Get User's API Key
+                            const { data: keyData } = await (supabase
+                                .from('vault_keys') as any)
+                                .select('encrypted_value')
+                                .eq('user_id', user.id)
+                                .eq('provider', 'resend')
+                                .single();
+
+                            if (keyData) {
+                                const { decrypt } = await import('@/lib/crypto');
+                                const apiKey = await decrypt(keyData.encrypted_value);
+                                const userResend = new Resend(apiKey);
+
+                                // Get Template
+                                const templateId = firstStep.config?.templateId;
+                                const { data: template } = await (supabase
+                                    .from('email_templates') as any)
+                                    .select('subject, content')
+                                    .eq('id', templateId)
+                                    .single();
+
+                                if (template) {
+                                    // Process Content
+                                    let htmlContent = String(template.content || "");
+                                    let subjectLine = String(template.subject || "Update");
+
+                                    // Simple substitution (could use email-processor if imported)
+                                    const { processEmailContent } = await import('@/utils/email-processor');
+                                    const variables = {
+                                        first_name: contact.first_name,
+                                        last_name: contact.last_name,
+                                        email: contact.email,
+                                        company: contact.company,
+                                        ...custom_fields
+                                    };
+                                    htmlContent = processEmailContent(htmlContent, variables);
+
+                                    // Simple subject replacement
+                                    subjectLine = subjectLine
+                                        .replace(/{{first_name}}/g, contact.first_name || '')
+                                        .replace(/{{last_name}}/g, contact.last_name || '');
+
+                                    // Sender Identity
+                                    let senderEmail = 'onboarding@resend.dev';
+                                    if (firstStep.config?.senderId) {
+                                        const { data: senderData } = await (supabase
+                                            .from('sender_identities') as any)
+                                            .select('email, name')
+                                            .eq('id', firstStep.config.senderId)
+                                            .eq('user_id', user.id)
+                                            .single();
+                                        if (senderData) senderEmail = `${senderData.name} <${senderData.email}>`;
+                                    }
+
+                                    await userResend.emails.send({
+                                        from: senderEmail,
+                                        to: contact.email,
+                                        subject: subjectLine,
+                                        html: htmlContent
+                                    });
+                                }
+                            }
+                        } else if (firstStep.type === 'add_tag') {
+                            const tagName = firstStep.config?.tag;
+                            if (tagName) {
+                                // Find or Create Tag
+                                let tagId;
+                                const { data: existingTag } = await (supabase
+                                    .from('tags') as any)
+                                    .select('id')
+                                    .eq('user_id', user.id)
+                                    .eq('name', tagName)
+                                    .single();
+
+                                if (existingTag) {
+                                    tagId = existingTag.id;
+                                } else {
+                                    const { data: newTag } = await (supabase.from('tags') as any)
+                                        .insert({ user_id: user.id, name: tagName })
+                                        .select('id').single();
+                                    if (newTag) tagId = newTag.id;
+                                }
+
+                                if (tagId) {
+                                    await (supabase.from('contact_tags') as any)
+                                        .insert({ contact_id: contact.id, tag_id: tagId });
+                                }
+                            }
+                        }
+
+                        // Queue subsequent steps
+                        if ((auto.workflow_config as any)?.steps?.length > 1) {
+                            queueItems.push({
+                                automation_id: auto.id,
+                                contact_id: contact.id,
+                                status: 'pending',
+                                payload: { step_index: 1 }
+                            });
+                        }
+
+                    } catch (e) {
+                        console.error(`[CreateContact] Instant execution failed`, e);
+                        // Fallback: queue entire workflow
+                        queueItems.push({
+                            automation_id: auto.id,
+                            contact_id: contact.id,
+                            status: 'pending',
+                            payload: { step_index: 0 }
+                        });
+                    }
+                } else {
+                    // Queue entire workflow
+                    queueItems.push({
+                        automation_id: auto.id,
+                        contact_id: contact.id,
+                        status: 'pending',
+                        payload: { step_index: 0 }
+                    });
+                }
+            }
+
+            if (queueItems.length > 0) {
+                await (supabase.from('automation_queue') as any).insert(queueItems);
             }
         }
 

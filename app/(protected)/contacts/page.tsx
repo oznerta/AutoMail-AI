@@ -1,16 +1,12 @@
 ﻿'use client'
 
 import { ImportContactsDialog } from "./import-dialog";
-
 import * as React from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Card,
     CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
 } from "@/components/ui/card";
 import {
     Table,
@@ -43,24 +39,35 @@ import { Badge } from "@/components/ui/badge";
 import { TagInput } from "@/components/ui/tag-input";
 import { PlusCircle, Trash2, Edit, Loader2, Search, Download } from "lucide-react";
 import Papa from "papaparse";
-
-type Contact = {
-    id: string;
-    email: string;
-    first_name: string | null;
-    last_name: string | null;
-    company: string | null;
-    tags: string[];
-    custom_fields: Record<string, string>;
-    status: 'active' | 'unsubscribed' | 'bounced';
-    source: string | null;
-    created_at: string;
-};
+import { useContacts, Contact } from "@/hooks/use-contacts";
+import { useTags } from "@/hooks/use-tags";
+import { TableSkeleton } from "@/components/ui/skeleton-loader";
+import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function ContactsPage() {
-    const [contacts, setContacts] = useState<Contact[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
+    const {
+        contacts = [],
+        isLoading,
+        addContact,
+        updateContact,
+        deleteContact,
+        isAdding,
+        isUpdating
+    } = useContacts();
+
+    const { tags: availableTags } = useTags();
+
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [newContact, setNewContact] = useState({
         email: '',
@@ -71,8 +78,7 @@ export default function ContactsPage() {
         custom_fields: {} as Record<string, string>,
     });
 
-    const [availableTags, setAvailableTags] = useState<string[]>([]);
-    const [fieldDefinitions, setFieldDefinitions] = useState<{ id: string, name: string }[]>([]);
+    const [fieldDefinitions] = useState<{ id: string, name: string }[]>([]); // simplified for now
     const [visibleColumns, setVisibleColumns] = useState<string[]>(['email', 'first_name', 'last_name', 'company', 'tags', 'status']);
 
     const allColumns = [
@@ -86,104 +92,32 @@ export default function ContactsPage() {
         ...fieldDefinitions.map(def => ({ id: def.name, label: def.name, isCustom: true }))
     ];
 
-    useEffect(() => {
-        const fetchTags = async () => {
-            try {
-                const res = await fetch('/api/tags');
-                const data = await res.json();
-                if (data.tags) {
-                    setAvailableTags(data.tags.map((t: any) => t.name));
-                }
-            } catch (error) {
-                console.error("Failed to fetch tags:", error);
-            }
-        };
-        fetchTags();
-    }, [contacts]);
-
-    // Fetch contacts and definitions
-    const fetchContacts = async () => {
-        try {
-            const [contactsRes, defsRes] = await Promise.all([
-                fetch('/api/contacts'),
-                fetch('/api/data/definitions')
-            ]);
-
-            const contactsData = await contactsRes.json();
-            if (contactsData.contacts) setContacts(contactsData.contacts);
-
-            const defsData = await defsRes.json();
-            if (defsData.definitions) setFieldDefinitions(defsData.definitions);
-
-        } catch (error) {
-            console.error('Failed to fetch data:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [editingContact, setEditingContact] = useState<Contact | null>(null);
 
-    useEffect(() => {
-        fetchContacts();
-    }, []);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [contactToDelete, setContactToDelete] = useState<string | null>(null);
 
     // Add contact
-    const handleAddContact = async () => {
-        setIsSaving(true);
-        try {
-            const response = await fetch('/api/contacts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ...newContact,
-                    tags: newContact.tags,
-                    custom_fields: newContact.custom_fields,
-                }),
-            });
-
-            if (response.ok) {
+    const handleAddContact = () => {
+        addContact(newContact, {
+            onSuccess: () => {
                 setIsAddDialogOpen(false);
                 setNewContact({ email: '', first_name: '', last_name: '', company: '', tags: [], custom_fields: {} });
-                fetchContacts();
             }
-        } catch (error) {
-            console.error('Failed to add contact:', error);
-        } finally {
-            setIsSaving(false);
-        }
+        });
     };
 
     // Update contact
-    const handleUpdateContact = async () => {
+    const handleUpdateContact = () => {
         if (!editingContact) return;
-        setIsSaving(true);
-
-        try {
-            const response = await fetch(`/api/contacts/${editingContact.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ...editingContact,
-                    tags: editingContact.tags,
-                    custom_fields: editingContact.custom_fields,
-                }),
-            });
-
-            if (response.ok) {
+        updateContact(editingContact, {
+            onSuccess: () => {
                 setIsEditDialogOpen(false);
                 setEditingContact(null);
-                fetchContacts();
             }
-        } catch (error) {
-            console.error('Failed to update contact:', error);
-        } finally {
-            setIsSaving(false);
-        }
+        });
     };
-
-    // ... (delete and other handlers remain same) ...
 
     // Helper to add/remove custom fields
     const updateCustomField = (
@@ -210,18 +144,6 @@ export default function ContactsPage() {
         setTarget({ ...target, custom_fields: newFields } as any);
     };
 
-    const removeCustomField = (isEditing: boolean, key: string) => {
-        const target = isEditing ? editingContact : newContact;
-        const setTarget = isEditing ? setEditingContact : setNewContact;
-
-        if (!target) return;
-
-        const newFields = { ...(target.custom_fields || {}) };
-        delete newFields[key];
-
-        setTarget({ ...target, custom_fields: newFields } as any);
-    };
-
     // Component for rendering custom fields inputs (Static based on definitions)
     const CustomFieldsEditor = ({ isEditing }: { isEditing: boolean }) => {
         const target = isEditing ? editingContact : newContact;
@@ -229,8 +151,8 @@ export default function ContactsPage() {
 
         if (fieldDefinitions.length === 0) {
             return (
-                <div className="text-xs text-muted-foreground text-center py-2 border border-dashed rounded-md">
-                    No custom fields defined. Go to &quot;Fields &amp; Tags&quot; to add some.
+                <div className="text-xs text-muted-foreground text-center py-2 border border-dashed rounded-md bg-muted/30">
+                    No custom fields defined. Go to "Fields & Tags" to add some.
                 </div>
             );
         }
@@ -257,29 +179,36 @@ export default function ContactsPage() {
         );
     };
 
-    // ... (Dialog rendering updates below) ...
-
-
     // Delete contact
-    const handleDeleteContact = async (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
-        e.stopPropagation(); // Prevent row click if we add one later
-        if (!confirm('Are you sure you want to delete this contact?')) return;
+    // Delete contact - Open Confirmation
+    const confirmDelete = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation();
+        setContactToDelete(id);
+        setIsDeleteDialogOpen(true);
+    };
 
-        try {
-            const response = await fetch(`/api/contacts/${id}`, {
-                method: 'DELETE',
-            });
+    const handleDeleteConfirmed = () => {
+        if (!contactToDelete) return;
 
-            if (response.ok) {
-                fetchContacts();
+        toast.promise(
+            new Promise((resolve) => {
+                deleteContact(contactToDelete, {
+                    onSuccess: () => {
+                        resolve(true);
+                        setIsDeleteDialogOpen(false);
+                        setContactToDelete(null);
+                    }
+                });
+            }),
+            {
+                loading: 'Deleting...',
+                success: 'Contact deleted',
+                error: 'Failed to delete contact'
             }
-        } catch (error) {
-            console.error('Failed to delete contact:', error);
-        }
+        );
     };
 
     const openEditDialog = (contact: Contact) => {
-        // Ensure tags is always an array
         const contactWithTagsArray = {
             ...contact,
             tags: Array.isArray(contact.tags) ? contact.tags : [],
@@ -288,7 +217,6 @@ export default function ContactsPage() {
         setIsEditDialogOpen(true);
     };
 
-    // Helper to render tags with overflow handling
     const renderTags = (tags: string[]) => {
         const MAX_VISIBLE_TAGS = 2;
         const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
@@ -297,7 +225,7 @@ export default function ContactsPage() {
         return (
             <div className="flex gap-1 flex-wrap items-center">
                 {visibleTags.map((tag, idx) => (
-                    <Badge key={idx} variant="secondary" className="text-xs px-1.5 h-5">
+                    <Badge key={idx} variant="secondary" className="text-xs px-1.5 h-5 bg-teal-100/50 text-teal-800 hover:bg-teal-100 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800">
                         {tag}
                     </Badge>
                 ))}
@@ -344,11 +272,9 @@ export default function ContactsPage() {
         document.body.removeChild(link);
     };
 
-    // Derived state for stats/options
-    const allTags = Array.from(new Set(contacts.flatMap(c => c.tags || []))).sort();
+    const allCurrentTags = Array.from(new Set(contacts.flatMap(c => c.tags || []))).sort();
 
     const filteredContacts = contacts.filter(contact => {
-        // Search Filter
         const searchLower = searchQuery.toLowerCase();
         const matchesSearch =
             contact.email.toLowerCase().includes(searchLower) ||
@@ -356,16 +282,12 @@ export default function ContactsPage() {
             (contact.last_name?.toLowerCase() || '').includes(searchLower) ||
             (contact.company?.toLowerCase() || '').includes(searchLower);
 
-        // Status Filter
         const matchesStatus = statusFilter === 'all' || contact.status === statusFilter;
-
-        // Tag Filter
         const matchesTag = tagFilter === 'all' || (contact.tags || []).includes(tagFilter);
 
         return matchesSearch && matchesStatus && matchesTag;
     });
 
-    // Pagination Logic
     const totalPages = Math.ceil(filteredContacts.length / itemsPerPage);
     const paginatedContacts = filteredContacts.slice(
         (currentPage - 1) * itemsPerPage,
@@ -373,38 +295,35 @@ export default function ContactsPage() {
     );
 
     // Reset page when filters change
-    useEffect(() => {
+    React.useEffect(() => {
         setCurrentPage(1);
     }, [searchQuery, statusFilter, tagFilter]);
 
     return (
-        <div className="flex flex-col gap-4">
-
-
-
+        <div className="flex flex-col gap-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                    <h1 className="text-lg font-semibold md:text-2xl">Contacts</h1>
+                <div className="space-y-1">
+                    <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">Contacts</h1>
                     <p className="text-sm text-muted-foreground hidden sm:block">
                         Manage your subscribers and leads.
                     </p>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
-                    <Button variant="outline" size="sm" className="gap-1 hidden sm:flex" onClick={handleExport} disabled={filteredContacts.length === 0}>
+                    <Button variant="outline" size="sm" className="gap-2 hidden sm:flex h-9" onClick={handleExport} disabled={filteredContacts.length === 0}>
                         <Download className="h-3.5 w-3.5" />
-                        Export CSV
+                        Export
                     </Button>
                     <ImportContactsDialog />
                     <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                         <DialogTrigger asChild>
-                            <Button size="sm" className="gap-1 flex-1 sm:flex-none">
+                            <Button size="sm" className="gap-2 flex-1 sm:flex-none h-9 shadow-sm hover:shadow-md transition-all">
                                 <PlusCircle className="h-3.5 w-3.5" />
                                 <span className="whitespace-nowrap">
                                     Add Contact
                                 </span>
                             </Button>
                         </DialogTrigger>
-                        <DialogContent>
+                        <DialogContent className="sm:max-w-[500px]">
                             <DialogHeader>
                                 <DialogTitle>Add New Contact</DialogTitle>
                                 <DialogDescription>
@@ -420,6 +339,7 @@ export default function ContactsPage() {
                                         value={newContact.email}
                                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewContact({ ...newContact, email: e.target.value })}
                                         required
+                                        className="h-9"
                                     />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -429,6 +349,7 @@ export default function ContactsPage() {
                                             id="first_name"
                                             value={newContact.first_name}
                                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewContact({ ...newContact, first_name: e.target.value })}
+                                            className="h-9"
                                         />
                                     </div>
                                     <div className="grid gap-2">
@@ -437,6 +358,7 @@ export default function ContactsPage() {
                                             id="last_name"
                                             value={newContact.last_name}
                                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewContact({ ...newContact, last_name: e.target.value })}
+                                            className="h-9"
                                         />
                                     </div>
                                 </div>
@@ -446,6 +368,7 @@ export default function ContactsPage() {
                                         id="company"
                                         value={newContact.company}
                                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewContact({ ...newContact, company: e.target.value })}
+                                        className="h-9"
                                     />
                                 </div>
                                 <div className="grid gap-2">
@@ -462,9 +385,9 @@ export default function ContactsPage() {
                                 </div>
                             </div>
                             <DialogFooter>
-                                <Button onClick={handleAddContact} disabled={isSaving}>
-                                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    {isSaving ? 'Adding...' : 'Add Contact'}
+                                <Button onClick={handleAddContact} disabled={isAdding}>
+                                    {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    {isAdding ? 'Adding...' : 'Add Contact'}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
@@ -472,7 +395,7 @@ export default function ContactsPage() {
 
                     {/* Edit Dialog */}
                     <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                        <DialogContent>
+                        <DialogContent className="sm:max-w-[500px]">
                             <DialogHeader>
                                 <DialogTitle>Edit Contact</DialogTitle>
                                 <DialogDescription>
@@ -489,6 +412,7 @@ export default function ContactsPage() {
                                             value={editingContact.email}
                                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingContact({ ...editingContact, email: e.target.value })}
                                             required
+                                            className="h-9"
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
@@ -498,6 +422,7 @@ export default function ContactsPage() {
                                                 id="edit-first_name"
                                                 value={editingContact.first_name || ''}
                                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingContact({ ...editingContact, first_name: e.target.value })}
+                                                className="h-9"
                                             />
                                         </div>
                                         <div className="grid gap-2">
@@ -506,6 +431,7 @@ export default function ContactsPage() {
                                                 id="edit-last_name"
                                                 value={editingContact.last_name || ''}
                                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingContact({ ...editingContact, last_name: e.target.value })}
+                                                className="h-9"
                                             />
                                         </div>
                                     </div>
@@ -515,6 +441,7 @@ export default function ContactsPage() {
                                             id="edit-company"
                                             value={editingContact.company || ''}
                                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingContact({ ...editingContact, company: e.target.value })}
+                                            className="h-9"
                                         />
                                     </div>
                                     <div className="grid gap-2">
@@ -532,9 +459,9 @@ export default function ContactsPage() {
                                 </div>
                             )}
                             <DialogFooter>
-                                <Button onClick={handleUpdateContact} disabled={isSaving}>
-                                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    {isSaving ? 'Saving...' : 'Save Changes'}
+                                <Button onClick={handleUpdateContact} disabled={isUpdating}>
+                                    {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    {isUpdating ? 'Saving...' : 'Save Changes'}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
@@ -543,20 +470,20 @@ export default function ContactsPage() {
             </div>
 
             {/* Filters Toolbar */}
-            <div className="flex flex-col sm:flex-row gap-4 items-center bg-card p-4 rounded-lg border shadow-sm">
+            <div className="flex flex-col sm:flex-row gap-4 items-center bg-card/60 backdrop-blur-sm p-3.5 rounded-xl border shadow-sm">
                 <div className="relative w-full sm:flex-1">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         type="search"
                         placeholder="Search contacts..."
-                        className="pl-8 w-full"
+                        className="pl-9 w-full bg-background/50 border-input/60 focus:bg-background h-9"
                         value={searchQuery}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
                     />
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
                     <select
-                        className="h-10 w-full sm:w-[150px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="h-9 w-full sm:w-[130px] rounded-md border border-input bg-background/50 px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
                     >
@@ -567,19 +494,19 @@ export default function ContactsPage() {
                     </select>
 
                     <select
-                        className="h-10 w-full sm:w-[150px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="h-9 w-full sm:w-[130px] rounded-md border border-input bg-background/50 px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         value={tagFilter}
                         onChange={(e) => setTagFilter(e.target.value)}
                     >
                         <option value="all">All Tags</option>
-                        {allTags.map(tag => (
+                        {allCurrentTags.map(tag => (
                             <option key={tag} value={tag}>{tag}</option>
                         ))}
                     </select>
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="ml-auto">
+                            <Button variant="outline" size="sm" className="ml-auto h-9 bg-background/50">
                                 Columns
                             </Button>
                         </DropdownMenuTrigger>
@@ -606,112 +533,127 @@ export default function ContactsPage() {
                 </div>
             </div>
 
-            {loading ? (
-                <Card>
-                    <CardContent>
-                        <div className="flex justify-center py-8">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                        </div>
-                    </CardContent>
-                </Card>
+            {isLoading ? (
+                <TableSkeleton />
             ) : filteredContacts.length === 0 ? (
-                <Card>
+                <Card className="bg-muted/10 border-dashed">
                     <CardContent>
-                        <p className="text-center text-muted-foreground py-8">
-                            {contacts.length === 0
-                                ? 'No contacts yet. Click "Add Contact" to get started.'
-                                : 'No contacts match your filters.'}
-                        </p>
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                                <Search className="h-6 w-6 text-muted-foreground" />
+                            </div>
+                            <h3 className="text-lg font-semibold">No contacts found</h3>
+                            <p className="text-sm text-muted-foreground max-w-sm mt-1 mb-4">
+                                {contacts.length === 0
+                                    ? 'Get started by adding your first contact manually or importing from CSV.'
+                                    : 'No contacts match your current filters. Try adjusting them.'}
+                            </p>
+                            {contacts.length === 0 && (
+                                <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
+                                    Add your first contact
+                                </Button>
+                            )}
+                        </div>
                     </CardContent>
                 </Card>
             ) : (
                 <>
-                    <div className="hidden md:block overflow-x-auto">
-                        <Card>
-                            <CardContent className="p-0">
-                                <Table className="min-w-full">
-                                    <TableHeader>
-                                        <TableRow>
-                                            {allColumns.filter(col => visibleColumns.includes(col.id)).map(col => (
-                                                <TableHead key={col.id} className="whitespace-nowrap px-4 py-3 h-10">
-                                                    {col.label}
-                                                </TableHead>
-                                            ))}
-                                            <TableHead className="text-right pr-6 whitespace-nowrap px-4 py-3 h-10">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
+                    <div className="hidden md:block overflow-hidden rounded-xl border shadow-sm">
+                        <div className="overflow-x-auto">
+                            <Table className="min-w-full">
+                                <TableHeader className="bg-muted/20">
+                                    <TableRow className="hover:bg-transparent">
+                                        {allColumns.filter(col => visibleColumns.includes(col.id)).map(col => (
+                                            <TableHead key={col.id} className="whitespace-nowrap px-4 py-3 h-11 text-xs font-semibold tracking-wide uppercase text-muted-foreground">
+                                                {col.label}
+                                            </TableHead>
+                                        ))}
+                                        <TableHead className="text-right pr-6 whitespace-nowrap px-4 py-3 h-11 text-xs font-semibold tracking-wide uppercase text-muted-foreground">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    <AnimatePresence>
                                         {paginatedContacts.map((contact) => (
-                                            <TableRow key={contact.id}>
+                                            <motion.tr
+                                                layout
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                key={contact.id}
+                                                className="group hover:bg-muted/30 transition-colors border-b last:border-0"
+                                            >
                                                 {allColumns.filter(col => visibleColumns.includes(col.id)).map(col => (
-                                                    <TableCell key={col.id} className="whitespace-nowrap px-4 py-3">
-                                                        {col.id === 'email' && <div className="font-medium text-sm break-all">{contact.email}</div>}
+                                                    <TableCell key={col.id} className="whitespace-nowrap px-4 py-3 text-sm">
+                                                        {col.id === 'email' && <div className="font-medium text-foreground">{contact.email}</div>}
                                                         {col.id === 'first_name' && (contact.first_name || '-')}
                                                         {col.id === 'last_name' && (contact.last_name || '-')}
-                                                        {col.id === 'company' && (contact.company || '-')}
+                                                        {col.id === 'company' && (contact.company ? <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>{contact.company}</div> : '-')}
                                                         {col.id === 'tags' && renderTags(contact.tags)}
                                                         {col.id === 'status' && (
-                                                            <Badge className="text-xs" variant={contact.status === 'active' ? 'default' : 'outline'}>
+                                                            <Badge className="text-[10px] uppercase tracking-wider font-semibold" variant={contact.status === 'active' ? 'default' : 'outline'}>
                                                                 {contact.status}
                                                             </Badge>
                                                         )}
-                                                        {col.id === 'created_at' && new Date(contact.created_at).toLocaleDateString()}
+                                                        {col.id === 'created_at' && <span className="text-muted-foreground text-xs">{new Date(contact.created_at).toLocaleDateString()}</span>}
                                                         {col.isCustom && (contact.custom_fields?.[col.id] || '-')}
                                                     </TableCell>
                                                 ))}
-                                                <TableCell className="text-right pr-6 whitespace-nowrap px-4 py-3">
-                                                    <div className="flex justify-end gap-1">
+                                                <TableCell className="text-right pr-4 whitespace-nowrap px-4 py-3">
+                                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <Button
                                                             variant="ghost"
-                                                            size="sm"
-                                                            className="h-8 px-2"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-muted-foreground hover:text-primary"
                                                             onClick={() => openEditDialog(contact)}
                                                         >
-                                                            <Edit className="h-3.5 w-3.5" />
-                                                            <span className="sr-only md:not-sr-only md:ml-1.5">Edit</span>
+                                                            <Edit className="h-4 w-4" />
+                                                            <span className="sr-only">Edit</span>
                                                         </Button>
                                                         <Button
                                                             variant="ghost"
-                                                            size="sm"
-                                                            className="h-8 px-2 text-destructive hover:text-destructive"
-                                                            onClick={(e) => handleDeleteContact(contact.id, e)}
+                                                            size="icon"
+                                                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                            onClick={(e) => confirmDelete(contact.id, e)}
                                                         >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                            <span className="sr-only md:not-sr-only md:ml-1.5">Delete</span>
+                                                            <Trash2 className="h-4 w-4" />
+                                                            <span className="sr-only">Delete</span>
                                                         </Button>
                                                     </div>
                                                 </TableCell>
-                                            </TableRow>
+                                            </motion.tr>
                                         ))}
-                                    </TableBody>
-                                </Table>
-                                {/* Desktop Pagination */}
-                                {totalPages > 1 && (
-                                    <div className="flex items-center justify-end space-x-2 py-4 px-4 border-t bg-card/50">
-                                        <div className="text-xs text-muted-foreground mr-auto">
-                                            Page {currentPage} of {totalPages}
-                                        </div>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                            disabled={currentPage === 1}
-                                        >
-                                            Previous
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                            disabled={currentPage === totalPages}
-                                        >
-                                            Next
-                                        </Button>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                                    </AnimatePresence>
+                                </TableBody>
+                            </Table>
+                        </div>
                     </div>
+
+                    {/* Desktop Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-end space-x-2 py-2">
+                            <div className="text-xs text-muted-foreground mr-auto">
+                                Page {currentPage} of {totalPages}
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                disabled={currentPage === 1}
+                                className="h-8"
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                disabled={currentPage === totalPages}
+                                className="h-8"
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    )}
 
                     <div className="md:hidden grid gap-3">
                         {paginatedContacts.map((contact) => (
@@ -761,7 +703,7 @@ export default function ContactsPage() {
                                         variant="ghost"
                                         size="sm"
                                         className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => handleDeleteContact(contact.id, e)}
+                                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => confirmDelete(contact.id, e)}
                                     >
                                         <Trash2 className="h-3 w-3 mr-1" />
                                         Del
@@ -797,6 +739,25 @@ export default function ContactsPage() {
                     </div>
                 </>
             )}
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the contact
+                            and remove their data from our servers.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setContactToDelete(null)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirmed} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Delete Contact
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

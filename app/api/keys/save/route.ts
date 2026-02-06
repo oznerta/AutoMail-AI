@@ -14,7 +14,7 @@ const SaveKeySchema = z.object({
 export async function POST(request: Request) {
     try {
         // 1. Authenticate User
-        const supabase = createClient();
+        const supabase = await createClient();
         const {
             data: { user },
             error: authError,

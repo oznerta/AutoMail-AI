@@ -26,7 +26,7 @@ export type Campaign = {
 };
 
 export async function getCampaigns() {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) throw new Error("Unauthorized");
@@ -43,7 +43,7 @@ export async function getCampaigns() {
 }
 
 export async function getCampaign(id: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) throw new Error("Unauthorized");
@@ -60,7 +60,7 @@ export async function getCampaign(id: string) {
 }
 
 export async function createCampaign(name: string): Promise<Campaign> {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) throw new Error("Unauthorized");
@@ -96,7 +96,7 @@ export async function createCampaign(name: string): Promise<Campaign> {
 }
 
 export async function updateCampaign(id: string, updates: Partial<Campaign>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) throw new Error("Unauthorized");
@@ -116,7 +116,7 @@ export async function updateCampaign(id: string, updates: Partial<Campaign>) {
 }
 
 export async function deleteCampaign(id: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) throw new Error("Unauthorized");

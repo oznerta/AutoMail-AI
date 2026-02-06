@@ -5,7 +5,7 @@ import { decrypt } from '@/lib/crypto';
 
 export async function POST(req: NextRequest) {
     try {
-        const supabase = createClient() as any;
+        const supabase = await createClient() as any;
         const { data: { user }, error: authError } = await supabase.auth.getUser();
 
         if (authError || !user) {
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { templateId, senderId, recipientEmail } = body;
+        const { templateId, senderId, recipientEmail, fallbacks } = body;
 
         if (!templateId || !senderId || !recipientEmail) {
             return NextResponse.json(
@@ -72,12 +72,39 @@ export async function POST(req: NextRequest) {
         const apiKey = await decrypt(keyData.encrypted_value);
         const resend = new Resend(apiKey);
 
+        // --- Variable Substitution Logic ---
+        // 1. Try to find the recipient in contacts to use real data
+        const { data: contact } = await supabase
+            .from('contacts')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('email', recipientEmail)
+            .order('updated_at', { ascending: false }) // Handle duplicates: use most recent
+            .limit(1)
+            .single();
+
+        // 2. Prepare variables
+        const variables: Record<string, string> = {
+            email: recipientEmail,
+            first_name: contact?.first_name || '',
+            last_name: contact?.last_name || '',
+            company: contact?.company || '',
+            plan_tier: contact?.tags?.includes('Pro') ? 'Pro' : 'Free', // Example derived var
+        };
+
+        // 3. Process Content (Dynamic Import to avoid top-level issues if any)
+        const { processEmailContent } = await import('@/utils/email-processor');
+
+        const subject = processEmailContent(template.subject || 'Test Email', variables, fallbacks);
+        const html = processEmailContent(template.content || '<p>No content</p>', variables, fallbacks);
+
+
         // Send test email
         const { data: emailData, error: emailError } = await resend.emails.send({
             from: `${sender.name} <${sender.email}>`,
             to: recipientEmail,
-            subject: template.subject || 'Test Email',
-            html: template.content || '<p>No content</p>',
+            subject: subject,
+            html: html,
         });
 
         if (emailError) {

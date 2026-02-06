@@ -1,8 +1,22 @@
 "use client"
 
+// framer-motion imports should be added at the top, but I can't add them easily with partial replace if they aren't there.
+// I will assume I need to do a full file replacement or use multi-replace to add imports.
+// I will use replace_file_content to replace the entire return statement logic primarily, or the render part.
+// But first I need to ensure imports exist.
+// Let's replace the whole file content for safety and quality, as "premium polish" often touches many parts.
+// Actually, `EditorClient` is 580 lines. That's large.
+// I'll stick to replacing specific blocks but I need to add imports.
+
+// Step 1: Add imports.
+// Step 2: Replace Toolbar.
+
+// I will use `replace_file_content` to replace the imports first.
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Editor from "@monaco-editor/react"
+import Editor, { useMonaco } from "@monaco-editor/react"
+import { motion, AnimatePresence } from "framer-motion"
+import { cn } from "@/lib/utils"
 import {
     Save,
     ArrowLeft,
@@ -16,7 +30,12 @@ import {
     Sparkles,
     CheckCircle2,
     Laptop,
-    Smartphone
+    Smartphone,
+    MoreVertical,
+    Settings,
+    Maximize2,
+    Minimize2,
+    Send
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +58,7 @@ import {
 } from "@/components/ui/sheet"
 import { useToast } from "@/components/ui/use-toast"
 import { updateTemplate, getSenderIdentities } from "../actions"
+import { DEFAULT_FALLBACKS, processEmailContent } from "@/utils/email-processor"
 import { ImagePicker } from "./image-picker"
 import { AiChatPanel } from "./ai-chat-panel"
 import {
@@ -48,7 +68,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Send } from "lucide-react"
+
 
 interface Template {
     id: string
@@ -66,11 +86,11 @@ declare global {
 }
 
 const SAMPLE_VARIABLES = [
-    { label: "First Name", value: "{{contact.first_name}}" },
-    { label: "Last Name", value: "{{contact.last_name}}" },
-    { label: "Email", value: "{{contact.email}}" },
-    { label: "Company", value: "{{contact.company}}" },
-    { label: "Unsubscribe Link", value: '<a href="{{unsubscribe_url}}" style="color: grey; text-decoration: underline;">Unsubscribe</a>' },
+    { label: "First Name", value: "{{contact.first_name}}", key: "first_name" },
+    { label: "Last Name", value: "{{contact.last_name}}", key: "last_name" },
+    { label: "Email", value: "{{contact.email}}", key: "email" },
+    { label: "Company", value: "{{contact.company}}", key: "company" },
+    { label: "Unsubscribe Link", value: '<a href="{{unsubscribe_url}}" style="color: grey; text-decoration: underline;">Unsubscribe</a>', key: "unsubscribe_url" },
 ]
 
 export function EditorClient({ template }: { template: Template }) {
@@ -94,6 +114,29 @@ export function EditorClient({ template }: { template: Template }) {
     const [selectedSender, setSelectedSender] = useState("")
     const [testRecipient, setTestRecipient] = useState("")
     const [isSendingTest, setIsSendingTest] = useState(false)
+    const [selectedVariable, setSelectedVariable] = useState<any>(null)
+
+    // Personalization / Fallbacks State
+    const [isPersonalizationOpen, setIsPersonalizationOpen] = useState(false)
+    const [variableFallbacks, setVariableFallbacks] = useState<Record<string, string>>(DEFAULT_FALLBACKS)
+
+    // Load fallbacks from localStorage
+    useEffect(() => {
+        const saved = localStorage.getItem("automail-variable-fallbacks-v3")
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved)
+                setVariableFallbacks({ ...DEFAULT_FALLBACKS, ...parsed })
+            } catch (e) {
+                console.error("Failed to parse saved fallbacks", e)
+            }
+        }
+    }, [])
+
+    // Save fallbacks to localStorage
+    useEffect(() => {
+        localStorage.setItem("automail-variable-fallbacks-v3", JSON.stringify(variableFallbacks))
+    }, [variableFallbacks])
 
     const { toast } = useToast()
     const router = useRouter()
@@ -237,7 +280,8 @@ export function EditorClient({ template }: { template: Template }) {
                 body: JSON.stringify({
                     templateId: template.id,
                     senderId: selectedSender,
-                    recipientEmail: testRecipient
+                    recipientEmail: testRecipient,
+                    fallbacks: variableFallbacks
                 })
             })
 
@@ -266,40 +310,44 @@ export function EditorClient({ template }: { template: Template }) {
 
     return (
         <div className="flex flex-col h-[calc(100vh-2rem)] gap-4">
-            {/* Top Toolbar - Responsive Wrap */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b pb-4 gap-4 sm:gap-0">
+            {/* Top Toolbar - Sticky Glassmorphism */}
+            <motion.div
+                initial={{ y: -20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                className="flex flex-col sm:flex-row items-center justify-between border-b pb-4 pt-2 gap-4 sm:gap-0 sticky top-0 z-40 bg-background/80 backdrop-blur-md px-1 transition-all"
+            >
                 <div className="flex items-center gap-4 w-full sm:w-auto">
-                    <Button variant="ghost" size="icon" onClick={() => router.push('/email-builder')}>
-                        <ArrowLeft className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" onClick={() => router.push('/email-builder')} className="hover:bg-muted/50 rounded-full">
+                        <ArrowLeft className="h-5 w-5 opacity-70" />
                     </Button>
-                    <div className="flex flex-col gap-1 flex-1 sm:flex-none">
+                    <div className="flex flex-col gap-0.5 flex-1 sm:flex-none group">
                         <Input
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="h-8 font-semibold text-lg border-none shadow-none px-0 focus-visible:ring-0"
+                            className="h-8 font-semibold text-lg border-none shadow-none px-0 focus-visible:ring-0 bg-transparent group-hover:bg-muted/20 transition-colors rounded-md pl-1"
                             placeholder="Template Name"
                         />
-                        <div className="text-[10px] text-muted-foreground flex items-center gap-1 h-3">
+                        <div className="text-[10px] text-muted-foreground flex items-center gap-1 h-3 pl-1">
                             {isSaving ? (
-                                <>
+                                <span className="flex items-center gap-1 text-amber-500 animate-pulse">
                                     <Loader2 className="h-2 w-2 animate-spin" /> Saving...
-                                </>
+                                </span>
                             ) : (
-                                <>
-                                    <CheckCircle2 className="h-2 w-2 text-muted-foreground" /> Saved
-                                </>
+                                <span className="flex items-center gap-1 text-emerald-500">
+                                    <CheckCircle2 className="h-2 w-2" /> Saved
+                                </span>
                             )}
                         </div>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
+                <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
                     {/* Image Picker Button */}
                     <Dialog open={isImagePickerOpen} onOpenChange={setIsImagePickerOpen}>
                         <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="hidden md:flex mr-2">
-                                <ImageIcon className="mr-2 h-4 w-4" />
-                                Images
+                            <Button variant="ghost" size="sm" className="hidden md:flex mr-1 gap-2 text-muted-foreground hover:text-foreground">
+                                <ImageIcon className="h-4 w-4" />
+                                <span className="hidden lg:inline">Media</span>
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="max-w-3xl">
@@ -424,10 +472,10 @@ export function EditorClient({ template }: { template: Template }) {
                         Save
                     </Button>
                 </div>
-            </div>
+            </motion.div >
 
             {/* Subject Line Input */}
-            <div className="flex items-center gap-2 px-1">
+            < div className="flex items-center gap-2 px-1" >
                 <Label htmlFor="subject" className="w-[80px] text-muted-foreground hidden sm:block">Subject:</Label>
                 <Input
                     id="subject"
@@ -436,10 +484,10 @@ export function EditorClient({ template }: { template: Template }) {
                     placeholder="Subject Line..."
                     className="max-w-2xl bg-muted/30"
                 />
-            </div>
+            </div >
 
             {/* Main Editor Area */}
-            <div className="flex-1 flex gap-4 min-h-0 overflow-hidden relative">
+            < div className="flex-1 flex gap-4 min-h-0 overflow-hidden relative" >
                 <div className={`flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 h-full transition-all duration-300`}>
                     {/* Left: Code Editor */}
                     <div className={`border rounded-xl overflow-hidden flex flex-col h-full shadow-sm ${(viewMode === 'preview') ? 'hidden' : (viewMode === 'code' ? 'col-span-2' : '')}`}>
@@ -502,7 +550,7 @@ export function EditorClient({ template }: { template: Template }) {
                             <div className={`transition-all duration-300 bg-white shadow-xl ${previewDevice === 'mobile' ? 'w-[375px] h-[667px] rounded-[30px] border-[8px] border-slate-800 overflow-hidden' : 'w-full h-full'}`}>
                                 <iframe
                                     title="Preview"
-                                    srcDoc={content}
+                                    srcDoc={processEmailContent(content, {}, variableFallbacks)}
                                     className="w-full h-full border-none bg-white"
                                     sandbox="allow-same-origin"
                                 />
@@ -512,57 +560,135 @@ export function EditorClient({ template }: { template: Template }) {
                 </div>
 
                 {/* Variables Panel (Persistent / Responsive) */}
-                {isVariablesPanelOpen && (
-                    <div className="w-64 shrink-0 border-l bg-background/50 backdrop-blur-xl flex flex-col h-full animate-in slide-in-from-right-5 duration-200 absolute md:static z-20 right-0 top-0 bottom-0 shadow-2xl md:shadow-none border-l-border/50">
-                        {/* Panel Header */}
-                        <div className="p-4 border-b flex items-center justify-between bg-muted/30">
-                            <h3 className="font-semibold flex items-center gap-2 text-sm">
-                                <Sparkles className="h-4 w-4 text-primary" /> Toolkit
-                            </h3>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 md:hidden" onClick={() => setIsVariablesPanelOpen(false)}>
-                                <ArrowLeft className="h-3 w-3" />
-                            </Button>
-                        </div>
-
-                        {/* AI CTA Section */}
-                        <div className="p-4 border-b bg-gradient-to-b from-primary/5 to-transparent">
-                            <Button
-                                className="w-full shadow-sm bg-gradient-to-r from-primary to-emerald-500 hover:from-primary/90 hover:to-emerald-600 border-0"
-                                onClick={() => setIsAiOpen(true)}
-                            >
-                                <Bot className="mr-2 h-4 w-4" />
-                                Create with AI
-                            </Button>
-                        </div>
-
-                        {/* Variables List */}
-                        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                            <div className="pb-2 pt-1 px-1">
-                                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                    <Braces className="h-3 w-3" /> Variables
-                                </h4>
+                {/* Variables Panel (Persistent / Responsive) */}
+                <AnimatePresence>
+                    {isVariablesPanelOpen && (
+                        <motion.div
+                            initial={{ x: 100, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            exit={{ x: 100, opacity: 0 }}
+                            className="w-64 shrink-0 border-l bg-background/50 backdrop-blur-xl flex flex-col h-full absolute md:static z-20 right-0 top-0 bottom-0 shadow-2xl md:shadow-none border-l-border/50"
+                        >
+                            {/* Panel Header */}
+                            <div className="p-4 border-b flex items-center justify-between bg-muted/30">
+                                <h3 className="font-semibold flex items-center gap-2 text-sm">
+                                    <Sparkles className="h-4 w-4 text-primary" /> Toolkit
+                                </h3>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 md:hidden" onClick={() => setIsVariablesPanelOpen(false)}>
+                                    <ArrowLeft className="h-3 w-3" />
+                                </Button>
                             </div>
-                            {SAMPLE_VARIABLES.map((v) => (
-                                <div
-                                    key={v.value}
-                                    className="p-3 bg-card border rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 hover:shadow-md transition-all group active:scale-95"
-                                    onClick={() => insertTextAtCursor(v.value)}
-                                    title="Double-click to insert"
+
+                            {/* AI CTA Section */}
+                            <div className="p-4 border-b bg-gradient-to-b from-primary/5 to-transparent">
+                                <Button
+                                    className="w-full shadow-sm bg-gradient-to-r from-primary to-emerald-500 hover:from-primary/90 hover:to-emerald-600 border-0"
+                                    onClick={() => setIsAiOpen(true)}
                                 >
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="text-xs font-semibold text-foreground/80">{v.label}</span>
-                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                                    <Bot className="mr-2 h-4 w-4" />
+                                    Create with AI
+                                </Button>
+                            </div>
+
+                            {/* Variables List */}
+                            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                                <div className="pb-2 pt-1 px-1">
+                                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                        <Braces className="h-3 w-3" /> Variables
+                                    </h4>
+                                </div>
+                                {SAMPLE_VARIABLES.map((v) => (
+                                    <motion.div
+                                        key={v.value}
+                                        drag
+                                        dragSnapToOrigin
+                                        whileHover={{ scale: 1.02 }}
+                                        whileDrag={{ scale: 1.1, zIndex: 50, cursor: 'grabbing' }}
+                                        className="p-3 bg-card border rounded-lg cursor-grab hover:border-primary/50 hover:bg-primary/5 hover:shadow-md transition-all group active:cursor-grabbing"
+                                        onClick={() => setSelectedVariable(v)}
+                                        title="Click to configure"
+                                    >
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs font-semibold text-foreground/80">{v.label}</span>
+                                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Settings className="h-3 w-3 text-muted-foreground" />
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="text-[10px] font-mono text-muted-foreground bg-muted/50 p-1.5 rounded border border-transparent group-hover:border-primary/10 overflow-hidden text-ellipsis whitespace-nowrap">
-                                        {v.value}
+                                        <div className="text-[10px] font-mono text-muted-foreground bg-muted/50 p-1.5 rounded border border-transparent group-hover:border-primary/10 overflow-hidden text-ellipsis whitespace-nowrap select-none">
+                                            {v.value}
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Variable Detail Modal */}
+                <Dialog open={!!selectedVariable} onOpenChange={(open) => !open && setSelectedVariable(null)}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>{selectedVariable?.label}</DialogTitle>
+                            <DialogDescription>
+                                Configure this variable or copy it to your clipboard.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        {selectedVariable && (
+                            <div className="space-y-4 py-4">
+                                {/* Copy Code */}
+                                <div className="space-y-2">
+                                    <Label>Variable Code</Label>
+                                    <div className="flex gap-2">
+                                        <code className="flex-1 p-2 bg-muted rounded text-sm font-mono border flex items-center">
+                                            {selectedVariable.value}
+                                        </code>
+                                        <Button
+                                            size="icon"
+                                            variant="outline"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(selectedVariable.value)
+                                                toast({ title: "Copied!", description: "Variable code copied to clipboard" })
+                                            }}
+                                            title="Copy to Clipboard"
+                                        >
+                                            <Code className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            size="icon"
+                                            onClick={() => {
+                                                insertTextAtCursor(selectedVariable.value)
+                                                setSelectedVariable(null)
+                                            }}
+                                            title="Insert into Editor"
+                                        >
+                                            <ArrowLeft className="h-4 w-4" />
+                                        </Button>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+
+                                {/* Preview/Fallback Value */}
+                                <div className="space-y-2">
+                                    <Label>Preview / Fallback Value</Label>
+                                    <Input
+                                        value={variableFallbacks[selectedVariable.key] || ""}
+                                        onChange={(e) => {
+                                            setVariableFallbacks(prev => ({
+                                                ...prev,
+                                                [selectedVariable.key]: e.target.value
+                                            }))
+                                        }}
+                                        placeholder={`e.g. ${selectedVariable.label === "First Name" ? "John" : "Value"}`}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        This value will be shown in the preview and used as a fallback if data is missing.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </DialogContent>
+                </Dialog>
+
             </div>
 
             {/* AI Chat Panel */}
@@ -575,5 +701,3 @@ export function EditorClient({ template }: { template: Template }) {
         </div>
     )
 }
-
-

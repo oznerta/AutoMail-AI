@@ -15,10 +15,11 @@ const UpdateContactSchema = z.object({
 
 export async function PATCH(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id: contactId } = await params;
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
 
         const {
             data: { user },
@@ -48,7 +49,7 @@ export async function PATCH(
         const { data: contact, error } = await (supabase
             .from('contacts') as any)
             .update(contactUpdates)
-            .eq('id', params.id)
+            .eq('id', contactId)
             .eq('user_id', user.id)
             .select()
             .single();
@@ -63,9 +64,19 @@ export async function PATCH(
 
         // 2. Sync Tags
         if (tags !== undefined) {
+            // Get existing tags to determine what's NEW
+            const { data: existingTagLinks } = await (supabase
+                .from('contact_tags') as any)
+                .select('tag_id, tags!inner(name)')
+                .eq('contact_id', contactId);
+
+            const existingTagNames = new Set((existingTagLinks || []).map((link: any) => link.tags.name));
+            const newTagsSet = new Set(tags);
+            const addedTags = tags.filter(tag => !existingTagNames.has(tag));
+
             await (supabase.from('contact_tags') as any)
                 .delete()
-                .eq('contact_id', params.id);
+                .eq('contact_id', contactId);
 
             for (const tagName of tags) {
                 let tagId: string | null = null;
@@ -90,7 +101,46 @@ export async function PATCH(
                 if (tagId) {
                     await (supabase
                         .from('contact_tags') as any)
-                        .insert({ contact_id: params.id, tag_id: tagId });
+                        .insert({ contact_id: contactId, tag_id: tagId });
+                }
+            }
+
+            // Trigger "Tag Added" Automations for newly added tags
+            if (addedTags.length > 0) {
+                const { data: tagAutomations } = await supabase
+                    .from("automations")
+                    .select("*")
+                    .eq("user_id", user.id)
+                    .eq("status", "active")
+                    .eq("trigger_type", "tag_added");
+
+                const activeAutomations = (tagAutomations || []) as any[];
+
+                if (activeAutomations.length > 0) {
+                    const queueItems = [];
+                    for (const tagName of addedTags) {
+                        for (const auto of activeAutomations) {
+                            const triggerConfig = (auto.workflow_config as any)?.trigger;
+                            const targetTag = triggerConfig?.config?.tag || triggerConfig?.tag_filter || triggerConfig?.tag;
+
+                            if (!targetTag || targetTag === tagName) {
+                                queueItems.push({
+                                    automation_id: auto.id,
+                                    contact_id: contactId,
+                                    status: 'pending',
+                                    payload: {
+                                        step_index: 0,
+                                        trigger_data: { tag: tagName }
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                    if (queueItems.length > 0) {
+                        await (supabase.from("automation_queue") as any).insert(queueItems);
+                        console.log(`[Manual Update] Triggered ${queueItems.length} workflows for tags: ${addedTags.join(', ')}`);
+                    }
                 }
             }
         }
@@ -130,7 +180,7 @@ export async function PATCH(
                     await (supabase
                         .from('contact_field_values') as any)
                         .upsert({
-                            contact_id: params.id,
+                            contact_id: contactId,
                             field_id: defId,
                             value: value
                         }, { onConflict: 'contact_id, field_id' });
@@ -157,17 +207,18 @@ export async function PATCH(
 // DELETE - Delete a contact
 export async function DELETE(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id: contactId } = await params;
     try {
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const { error } = await supabase
             .from('contacts')
             .delete()
-            .eq('id', params.id)
+            .eq('id', contactId)
             .eq('user_id', user.id);
 
         if (error) {

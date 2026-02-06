@@ -16,12 +16,23 @@ import { format } from "date-fns";
 import { Calendar as CalendarIcon, Save, ArrowLeft, Send, CheckCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function CampaignBuilder({ campaign }: { campaign: Campaign }) {
     const router = useRouter();
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("settings");
     const [isSaving, setIsSaving] = useState(false);
+    const [showScheduleConfirm, setShowScheduleConfirm] = useState(false);
 
     // State
     const [name, setName] = useState(campaign.name);
@@ -71,12 +82,25 @@ export function CampaignBuilder({ campaign }: { campaign: Campaign }) {
         return newDate.toISOString();
     };
 
-    const handleSchedule = async () => {
-        if (!scheduledDate) return alert("Please select a date.");
-        if (!subject) return alert("Subject is required.");
-        if (!content) return alert("Email content is required.");
+    const handleScheduleCheck = () => {
+        if (!scheduledDate) {
+            toast({ variant: "destructive", title: "Missing Date", description: "Please select a date to schedule this campaign." });
+            return;
+        }
+        if (!subject) {
+            toast({ variant: "destructive", title: "Missing Subject", description: "A subject line is required." });
+            return;
+        }
+        if (!content) {
+            toast({ variant: "destructive", title: "Missing Content", description: "Email content is required." });
+            return;
+        }
 
-        if (!confirm("Are you sure you want to schedule this campaign?")) return;
+        setShowScheduleConfirm(true);
+    };
+
+    const handleScheduleConfirm = async () => {
+        if (!scheduledDate) return;
 
         setIsSaving(true);
         try {
@@ -84,11 +108,14 @@ export function CampaignBuilder({ campaign }: { campaign: Campaign }) {
                 status: 'scheduled',
                 scheduled_at: combineDateTime(scheduledDate, scheduledTime)
             });
+            toast({ title: "Scheduled", description: "Campaign scheduled successfully." });
             router.push('/campaigns');
         } catch (error) {
             console.error(error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to schedule campaign." });
         } finally {
             setIsSaving(false);
+            setShowScheduleConfirm(false);
         }
     };
 
@@ -113,7 +140,7 @@ export function CampaignBuilder({ campaign }: { campaign: Campaign }) {
                         <Save className="h-4 w-4 mr-2" />
                         Save Draft
                     </Button>
-                    <Button onClick={handleSchedule} disabled={isSaving || campaign.status !== 'draft'}>
+                    <Button onClick={handleScheduleCheck} disabled={isSaving || campaign.status !== 'draft'}>
                         {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
                         Schedule
                     </Button>
@@ -226,6 +253,23 @@ export function CampaignBuilder({ campaign }: { campaign: Campaign }) {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            <AlertDialog open={showScheduleConfirm} onOpenChange={setShowScheduleConfirm}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Schedule Campaign?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will schedule the campaign to be sent at the selected time. You can cancel it before it starts sending.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleScheduleConfirm}>
+                            Schedule
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

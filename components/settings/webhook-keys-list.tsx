@@ -21,6 +21,16 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -47,6 +57,7 @@ export function WebhookKeysList({ keys }: WebhookKeysListProps) {
     const [endpointCopied, setEndpointCopied] = useState(false)
     const [copied, setCopied] = useState(false)
     const [origin, setOrigin] = useState("")
+    const [keyToRevoke, setKeyToRevoke] = useState<string | null>(null)
 
     useEffect(() => {
         setOrigin(window.location.origin)
@@ -62,16 +73,14 @@ export function WebhookKeysList({ keys }: WebhookKeysListProps) {
             setCreatedKey(result.key)
             setNewKeyName("")
         } else {
-            // Handle error (alert or toast)
             console.error(result.error)
         }
     }
 
-    const handleRevokeWrapper = async (id: string) => {
-        // Confirm?
-        if (!confirm("Are you sure you want to revoke this key? Any integration using it will stop working immediately.")) return
-
-        await revokeWebhookKey(id)
+    const handleRevokeConfirm = async () => {
+        if (!keyToRevoke) return
+        await revokeWebhookKey(keyToRevoke)
+        setKeyToRevoke(null)
     }
 
     const copyToClipboard = () => {
@@ -226,7 +235,7 @@ export function WebhookKeysList({ keys }: WebhookKeysListProps) {
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                    onClick={() => handleRevokeWrapper(key.id)}
+                                                    onClick={() => setKeyToRevoke(key.id)}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
                                                     <span className="sr-only">Revoke</span>
@@ -239,6 +248,23 @@ export function WebhookKeysList({ keys }: WebhookKeysListProps) {
                         )}
                     </div>
                 </div>
+
+                <AlertDialog open={!!keyToRevoke} onOpenChange={(open) => !open && setKeyToRevoke(null)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will permanently revoke this API key. Any integration using it will stop working immediately.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleRevokeConfirm} className="bg-destructive hover:bg-destructive/90">
+                                Revoke Key
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </CardContent>
         </Card>
     )
