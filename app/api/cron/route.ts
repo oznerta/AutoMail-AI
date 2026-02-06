@@ -188,8 +188,9 @@ export async function GET(request: Request) {
                             const userResend = new Resend(apiKey);
 
                             // Replace Variables
-                            let htmlContent = automation.email_template || "<p>No content</p>";
-                            let subjectLine = automation.workflow_config?.subject || `Update from ${automation.name}`;
+                            // CRITICAL FIX: Use automationObj and ensure String type
+                            let htmlContent = String(automationObj.email_template || "<p>No content</p>");
+                            let subjectLine = String(automationObj.workflow_config?.subject || `Update from ${automationObj.name}`);
 
                             const firstName = (contact as any).first_name || '';
                             const lastName = (contact as any).last_name || '';
