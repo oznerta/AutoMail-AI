@@ -38,9 +38,17 @@ import {
     SheetTrigger,
 } from "@/components/ui/sheet"
 import { useToast } from "@/components/ui/use-toast"
-import { updateTemplate } from "../actions"
+import { updateTemplate, getSenderIdentities } from "../actions"
 import { ImagePicker } from "./image-picker"
 import { AiChatPanel } from "./ai-chat-panel"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { Send } from "lucide-react"
 
 interface Template {
     id: string
@@ -79,6 +87,13 @@ export function EditorClient({ template }: { template: Template }) {
 
     // Image Picker State
     const [isImagePickerOpen, setIsImagePickerOpen] = useState(false)
+
+    // Test Email State
+    const [isTestEmailOpen, setIsTestEmailOpen] = useState(false)
+    const [senders, setSenders] = useState<any[]>([])
+    const [selectedSender, setSelectedSender] = useState("")
+    const [testRecipient, setTestRecipient] = useState("")
+    const [isSendingTest, setIsSendingTest] = useState(false)
 
     const { toast } = useToast()
     const router = useRouter()
@@ -197,6 +212,58 @@ export function EditorClient({ template }: { template: Template }) {
     // Preview Device State
     const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop")
 
+    // Fetch senders when test email dialog opens
+    useEffect(() => {
+        if (isTestEmailOpen && senders.length === 0) {
+            getSenderIdentities().then(setSenders)
+        }
+    }, [isTestEmailOpen, senders.length])
+
+    const handleSendTest = async () => {
+        if (!selectedSender || !testRecipient) {
+            toast({
+                title: "Missing fields",
+                description: "Please select a sender and enter a recipient email.",
+                variant: "destructive"
+            })
+            return
+        }
+
+        setIsSendingTest(true)
+        try {
+            const response = await fetch('/api/send-test-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    templateId: template.id,
+                    senderId: selectedSender,
+                    recipientEmail: testRecipient
+                })
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to send test email')
+            }
+
+            toast({
+                title: "Test email sent!",
+                description: `Email sent to ${testRecipient}`
+            })
+            setIsTestEmailOpen(false)
+            setTestRecipient("")
+        } catch (error: any) {
+            toast({
+                title: "Failed to send",
+                description: error.message,
+                variant: "destructive"
+            })
+        } finally {
+            setIsSendingTest(false)
+        }
+    }
+
     return (
         <div className="flex flex-col h-[calc(100vh-2rem)] gap-4">
             {/* Top Toolbar - Responsive Wrap */}
@@ -284,6 +351,69 @@ export function EditorClient({ template }: { template: Template }) {
                     >
                         <Braces className="h-4 w-4" />
                     </Button>
+
+                    <Dialog open={isTestEmailOpen} onOpenChange={setIsTestEmailOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="mr-2 shrink-0">
+                                <Send className="mr-2 h-4 w-4" />
+                                Send Test
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Send Test Email</DialogTitle>
+                                <DialogDescription>
+                                    Send a test email to verify your template looks correct.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="sender">From (Sender)</Label>
+                                    <Select value={selectedSender} onValueChange={setSelectedSender}>
+                                        <SelectTrigger id="sender">
+                                            <SelectValue placeholder="Select sender..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {senders.map((sender) => (
+                                                <SelectItem key={sender.id} value={sender.id}>
+                                                    {sender.name} &lt;{sender.email}&gt;
+                                                    {!sender.verified && " (Unverified)"}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="recipient">To (Recipient)</Label>
+                                    <Input
+                                        id="recipient"
+                                        type="email"
+                                        placeholder="recipient@example.com"
+                                        value={testRecipient}
+                                        onChange={(e) => setTestRecipient(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={() => setIsTestEmailOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={handleSendTest} disabled={isSendingTest}>
+                                    {isSendingTest ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Sending...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Send className="mr-2 h-4 w-4" />
+                                            Send Test
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
 
                     <Button onClick={handleSave} disabled={isSaving} size="sm" className="shrink-0">
                         {isSaving ? (

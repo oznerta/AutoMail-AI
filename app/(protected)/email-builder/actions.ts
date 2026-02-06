@@ -272,3 +272,23 @@ CRITICAL RULES:
         return { error: "Internal Server Error." };
     }
 }
+
+export async function getSenderIdentities() {
+    const supabase = createClient() as any;
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return [];
+
+    const { data, error } = await supabase
+        .from('sender_identities')
+        .select('id, email, name, verified')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching sender identities:', error);
+        return [];
+    }
+
+    return data;
+}

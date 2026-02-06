@@ -107,6 +107,7 @@ export async function GET(request: Request) {
                         user_id
                     ),
                     contacts (
+                        id,
                         email,
                         first_name,
                         last_name
