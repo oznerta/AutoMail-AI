@@ -26,6 +26,7 @@ export function ImagePicker({ onSelect }: ImagePickerProps) {
     const [isLoading, setIsLoading] = useState(false)
     const [images, setImages] = useState<StorageFile[]>([])
     const [dragActive, setDragActive] = useState(false)
+    const [userId, setUserId] = useState<string | null>(null)
     const { toast } = useToast()
     const fileInputRef = useRef<HTMLInputElement>(null)
     const supabase = createClient()
@@ -35,6 +36,7 @@ export function ImagePicker({ onSelect }: ImagePickerProps) {
         try {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
+            setUserId(user.id) // Cache User ID
 
             const { data, error } = await supabase
                 .storage
@@ -104,10 +106,20 @@ export function ImagePicker({ onSelect }: ImagePickerProps) {
             return
         }
 
+        if (!userId) {
+            toast({
+                title: "Error",
+                description: "User session not found.",
+                variant: "destructive"
+            })
+            return
+        }
+
         setIsUploading(true)
         try {
             const fileExt = file.name.split('.').pop()
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+            // CRITICAL FIX: Upload to user's folder
+            const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
 
             const { error: uploadError } = await supabase.storage
                 .from('email_media')
