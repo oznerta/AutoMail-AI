@@ -11,6 +11,14 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -20,14 +28,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { WebhookKeysList } from "@/components/settings/webhook-keys-list";
 import { SenderIdentitiesList } from "@/components/settings/sender-identities-list";
 import { motion, AnimatePresence } from "framer-motion";
-
 import { createClient } from "@/utils/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
-import { updatePassword } from "@/utils/supabase/auth"; // Adding static import for clarity if I change my mind, but dynamic is fine. Actually let's just use dynamic in the code. 
-// Wait, I used dynamic import in the previous tool call.
-// Let's check the Email Update button. It is also likely broken.
-
 
 interface KeyStatus {
     openai: boolean;
@@ -218,6 +221,7 @@ function SettingsContent() {
     const { toast } = useToast();
 
     // Password State
+    const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [updatingPassword, setUpdatingPassword] = useState(false);
@@ -226,11 +230,20 @@ function SettingsContent() {
     const [newEmail, setNewEmail] = useState("");
     const [updatingEmail, setUpdatingEmail] = useState(false);
 
+
+
     // Delete State
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
 
-    const handleDeleteAccount = async () => {
-        if (!confirm("Are you ABSOLUTELY sure? This cannot be undone.")) return;
+    const handleDeleteClick = () => {
+        setIsDeleteDialogOpen(true);
+        setDeleteConfirmationText("");
+    };
+
+    const executeDeleteAccount = async () => {
+        if (deleteConfirmationText !== "DELETE") return;
 
         setIsDeleting(true);
         try {
@@ -246,6 +259,7 @@ function SettingsContent() {
             toast({ title: "Error", description: "Failed to delete account", variant: "destructive" });
         } finally {
             setIsDeleting(false);
+            setIsDeleteDialogOpen(false);
         }
     };
 
@@ -274,6 +288,10 @@ function SettingsContent() {
     // For now, I will use `fetchData` to get user details.
 
     const handleUpdatePassword = async () => {
+        if (!currentPassword) {
+            toast({ title: "Error", description: "Please enter your current password", variant: "destructive" });
+            return;
+        }
         if (!newPassword || !confirmPassword) {
             toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
             return;
@@ -288,20 +306,28 @@ function SettingsContent() {
         }
 
         setUpdatingPassword(true);
-        try {
-            // Dynamically import to avoid top-level issues if any
-            const { updatePassword } = await import("@/utils/supabase/auth");
-            const res = await updatePassword(newPassword);
+        const supabase = createClient();
 
-            if (res.error) {
-                toast({ title: "Error", description: res.error.message, variant: "destructive" });
-            } else {
-                toast({ title: "Success", description: "Password updated successfully." });
-                setNewPassword("");
-                setConfirmPassword("");
+        try {
+            // Verify current password
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: userEmail,
+                password: currentPassword
+            });
+
+            if (signInError) {
+                throw new Error("Incorrect current password");
             }
-        } catch (e: any) {
-            toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
+
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+
+            toast({ title: "Success", description: "Password updated successfully" });
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
             setUpdatingPassword(false);
         }
@@ -400,8 +426,15 @@ function SettingsContent() {
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-4">
-                                        {/* Current password is not strictly needed for Supabase updateUser if logged in, but good for UI flow if re-auth needed. 
-                                            Supabase updateUser doesn't require old password. We'll skip it for now or keep as dummy if needed later. */}
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="current-password">Current Password</Label>
+                                            <Input
+                                                id="current-password"
+                                                type="password"
+                                                value={currentPassword}
+                                                onChange={(e) => setCurrentPassword(e.target.value)}
+                                            />
+                                        </div>
                                         <div className="grid gap-2">
                                             <Label htmlFor="new-password">New Password</Label>
                                             <Input
@@ -485,12 +518,46 @@ function SettingsContent() {
                                         </Alert>
                                     </CardContent>
                                     <CardFooter className="border-t border-destructive/20 px-6 py-4 flex justify-end">
-                                        <Button variant="destructive" onClick={handleDeleteAccount} disabled={isDeleting}>
+                                        <Button variant="destructive" onClick={handleDeleteClick} disabled={isDeleting}>
                                             {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                                             {isDeleting ? "Deleting..." : "Delete Account"}
                                         </Button>
                                     </CardFooter>
                                 </Card>
+
+                                <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>Delete Account?</DialogTitle>
+                                            <DialogDescription>
+                                                This action cannot be undone. This will permanently delete your account and remove your data from our servers.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="py-4 space-y-4">
+                                            <p className="text-sm text-muted-foreground">
+                                                Please type <span className="font-bold text-destructive">DELETE</span> to confirm.
+                                            </p>
+                                            <Input
+                                                value={deleteConfirmationText}
+                                                onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                                                placeholder="Type DELETE"
+                                            />
+                                        </div>
+                                        <DialogFooter>
+                                            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
+                                                Cancel
+                                            </Button>
+                                            <Button
+                                                variant="destructive"
+                                                onClick={executeDeleteAccount}
+                                                disabled={deleteConfirmationText !== 'DELETE' || isDeleting}
+                                            >
+                                                {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                Confirm Delete
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
                             </div>
                         )}
 

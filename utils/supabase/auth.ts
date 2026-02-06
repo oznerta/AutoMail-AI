@@ -104,7 +104,7 @@ export async function resetPassword(
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${baseUrl}/auth/reset-password`,
+        redirectTo: `${baseUrl}/auth/callback?next=/reset-password`,
     });
 
     if (error) {

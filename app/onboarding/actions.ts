@@ -1,36 +1,60 @@
-'use server'
+'use server';
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function checkOnboardingStatus() {
-    const supabase = await createClient();
+    const supabase: any = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) return { error: "Not authenticated" };
+    if (!user) {
+        return { error: 'Not authenticated', isComplete: false };
+    }
 
-    // Check Vault Keys
-    const { data: keys } = await supabase
-        .from('vault_keys')
-        .select('provider')
-        .eq('user_id', user.id)
-        .returns<{ provider: string }[]>();
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('preferences')
+        .eq('id', user.id)
+        .single();
 
-    const hasOpenAI = keys?.some(k => k.provider === 'openai') || false;
-    const hasResend = keys?.some(k => k.provider === 'resend') || false;
+    // Check if preferences explicitly say onboarding_completed: true
+    const isComplete = (profile?.preferences as any)?.onboarding_completed === true;
 
-    // Check Sender Identities
-    const { count: senderCount } = await supabase
-        .from('sender_identities')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
+    return { isComplete };
+}
 
-    const hasSender = (senderCount || 0) > 0;
+export async function completeOnboarding() {
+    const supabase: any = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    return {
-        hasOpenAI,
-        hasResend,
-        hasSender,
-        isComplete: hasOpenAI && hasResend && hasSender
-    };
+    if (!user) {
+        throw new Error("Not authenticated");
+    }
+
+    // Get existing preferences to merge
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('preferences')
+        .eq('id', user.id)
+        .single();
+
+    const currentPrefs = (profile as any)?.preferences || {};
+
+    const { error } = await supabase
+        .from('profiles')
+        .update({
+            preferences: {
+                ...currentPrefs,
+                onboarding_completed: true
+            }
+        })
+        .eq('id', user.id);
+
+    if (error) {
+        console.error("Failed to update onboarding status:", error);
+        throw error;
+    }
+
+    revalidatePath('/', 'layout');
+    return { success: true };
 }

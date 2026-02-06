@@ -41,8 +41,26 @@ export const signupSchema = z.object({
     path: ["confirmPassword"],
 });
 
+export const simpleSignupSchema = z.object({
+    email: z
+        .string()
+        .min(1, 'Email is required')
+        .email('Invalid email address'),
+    password: z
+        .string()
+        .min(8, 'Password must be at least 8 characters')
+        // Relaxing regex requirements for initial signup to reduce friction, or keeping them?
+        // User wants premium feel -> strict security is good but friction bad. 
+        // Let's keep strict regex but maybe remove Confirm Password for now.
+        .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+        .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+        .regex(/[0-9]/, 'Password must contain at least one number')
+        .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupInput = z.infer<typeof signupSchema>;
+export type SimpleSignupInput = z.infer<typeof simpleSignupSchema>;
 
 /**
  * Calculate password strength (0-100)

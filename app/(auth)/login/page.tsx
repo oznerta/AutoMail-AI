@@ -13,6 +13,7 @@ import { loginSchema } from "@/lib/validation/auth"
 import { Loader2 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { AuthFeatureCard } from "@/components/auth/auth-feature-card"
+import { DemoAccountAlert } from "@/components/auth/demo-account-alert"
 import dynamic from "next/dynamic"
 
 // Dynamically import ThreeScene to avoid SSR issues with Three.js
@@ -59,6 +60,10 @@ export default function LoginPage() {
             setError("Failed to sign in with Google. Please try again.")
         }
     }
+    const handleDemoFill = (emailVal: string, passwordVal: string) => {
+        setEmail(emailVal)
+        setPassword(passwordVal)
+    }
 
     return (
         <div className="w-full min-h-screen lg:grid lg:grid-cols-2 overflow-hidden bg-background">
@@ -98,6 +103,7 @@ export default function LoginPage() {
 
                     <div className="space-y-6">
                         <AuthError error={error} />
+                        <DemoAccountAlert onFill={handleDemoFill} />
                         <form onSubmit={handleEmailLogin} className="space-y-5">
                             <div className="space-y-2">
                                 <Label htmlFor="email" className="text-zinc-600 dark:text-zinc-400">Email</Label>

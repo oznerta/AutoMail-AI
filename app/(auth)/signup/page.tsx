@@ -9,10 +9,11 @@ import { Label } from "@/components/ui/label"
 import { signInWithGoogle } from "@/utils/supabase/client"
 import { signUpWithEmail } from "@/utils/supabase/auth"
 import { AuthError } from "@/components/ui/auth-error"
-import { signupSchema } from "@/lib/validation/auth"
+import { simpleSignupSchema } from "@/lib/validation/auth"
 import { Loader2 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { AuthFeatureCard } from "@/components/auth/auth-feature-card"
+import { DemoAccountAlert } from "@/components/auth/demo-account-alert"
 import dynamic from "next/dynamic"
 
 // Dynamically import ThreeScene to avoid SSR issues with Three.js
@@ -34,7 +35,7 @@ export default function SignupPage() {
         setError(null)
         setIsLoading(true)
 
-        const result = signupSchema.safeParse({ email, password })
+        const result = simpleSignupSchema.safeParse({ email, password })
         if (!result.success) {
             setError(result.error.errors[0].message)
             setIsLoading(false)
@@ -124,6 +125,13 @@ export default function SignupPage() {
 
                     <div className="space-y-6">
                         <AuthError error={error} />
+                        <DemoAccountAlert onFill={(e, p) => {
+                            setEmail(e)
+                            setPassword(p)
+                            // Optional: Scroll to bottom or show hint to click "Sign In" instead? 
+                            // Or just let them hit "Sign Up" and get "User already exists", then they click Sign In.
+                            // The Alert says "Want to explore without signing up?", implying Login.
+                        }} />
                         <form onSubmit={handleEmailSignup} className="space-y-5">
                             <div className="space-y-2">
                                 <Label htmlFor="email" className="text-zinc-600 dark:text-zinc-400">Email</Label>
