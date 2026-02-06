@@ -194,71 +194,117 @@ export async function POST(request: NextRequest) {
                 const targetEvent = triggerConfig?.config?.event || triggerConfig?.value || triggerConfig?.event;
 
                 if (targetEvent === eventName) {
-                    // Check if first step has 0 delay for instant execution
+                    // Check if first step should execute instantly
+                    // send_email and add_tag steps have no delay, delay steps have config.value
                     const firstStep = (auto.workflow_config as any)?.steps?.[0];
-                    const hasInstantFirstStep = firstStep && (firstStep.delay === 0 || firstStep.delay === '0');
+                    const shouldExecuteInstantly = firstStep && (firstStep.type === 'send_email' || firstStep.type === 'add_tag');
 
-                    if (hasInstantFirstStep) {
+                    if (shouldExecuteInstantly) {
                         // Execute first step immediately
-                        console.log(`[Ingest] Instant execution for automation ${auto.id}`);
+                        console.log(`[Ingest] Instant execution for automation ${auto.id}, step type: ${firstStep.type}`);
 
                         try {
-                            // Import Resend for email sending
-                            const { Resend } = await import('resend');
+                            if (firstStep.type === 'send_email') {
+                                // Import Resend for email sending
+                                const { Resend } = await import('resend');
 
-                            // Fetch user's Resend key
-                            const { data: keyData } = await supabaseAdmin
-                                .from('vault_keys')
-                                .select('encrypted_value')
-                                .eq('user_id', keyRecord.user_id)
-                                .eq('provider', 'resend')
-                                .single();
+                                // Fetch user's Resend key
+                                const { data: keyData } = await supabaseAdmin
+                                    .from('vault_keys')
+                                    .select('encrypted_value')
+                                    .eq('user_id', keyRecord.user_id)
+                                    .eq('provider', 'resend')
+                                    .single();
 
-                            if (keyData && firstStep.type === 'send_email') {
-                                const { decrypt } = await import('@/lib/crypto');
-                                const apiKey = await decrypt(keyData.encrypted_value);
-                                const userResend = new Resend(apiKey);
+                                if (keyData) {
+                                    const { decrypt } = await import('@/lib/crypto');
+                                    const apiKey = await decrypt(keyData.encrypted_value);
+                                    const userResend = new Resend(apiKey);
 
-                                // Replace variables
-                                let htmlContent = String(auto.email_template || "<p>No content</p>");
-                                let subjectLine = String((auto.workflow_config as any)?.subject || `Update from ${auto.name}`);
-
-                                const firstName = contact.first_name || '';
-                                const lastName = contact.last_name || '';
-                                const emailAddr = contact.email || '';
-
-                                htmlContent = htmlContent
-                                    .replace(/{{first_name}}/g, firstName)
-                                    .replace(/{{last_name}}/g, lastName)
-                                    .replace(/{{email}}/g, emailAddr);
-
-                                subjectLine = subjectLine.replace(/{{first_name}}/g, firstName);
-
-                                // Get sender
-                                let senderEmail = 'onboarding@resend.dev';
-                                const senderId = (auto.workflow_config as any)?.sender_id;
-
-                                if (senderId) {
-                                    const { data: senderData } = await supabaseAdmin
-                                        .from('sender_identities')
-                                        .select('email, name')
-                                        .eq('id', senderId)
-                                        .eq('user_id', keyRecord.user_id)
+                                    // Get email template
+                                    const templateId = firstStep.config?.templateId;
+                                    const { data: template } = await supabaseAdmin
+                                        .from('email_templates')
+                                        .select('subject, html_content')
+                                        .eq('id', templateId)
                                         .single();
 
-                                    if (senderData) {
-                                        senderEmail = `${senderData.name} <${senderData.email}>`;
+                                    if (template) {
+                                        // Replace variables
+                                        let htmlContent = String(template.html_content || "<p>No content</p>");
+                                        let subjectLine = String(template.subject || "Update");
+
+                                        const firstName = contact.first_name || '';
+                                        const lastName = contact.last_name || '';
+                                        const emailAddr = contact.email || '';
+
+                                        htmlContent = htmlContent
+                                            .replace(/{{first_name}}/g, firstName)
+                                            .replace(/{{last_name}}/g, lastName)
+                                            .replace(/{{email}}/g, emailAddr);
+
+                                        subjectLine = subjectLine.replace(/{{first_name}}/g, firstName);
+
+                                        // Get sender
+                                        let senderEmail = 'onboarding@resend.dev';
+                                        const senderId = firstStep.config?.senderId;
+
+                                        if (senderId) {
+                                            const { data: senderData } = await supabaseAdmin
+                                                .from('sender_identities')
+                                                .select('email, name')
+                                                .eq('id', senderId)
+                                                .eq('user_id', keyRecord.user_id)
+                                                .single();
+
+                                            if (senderData) {
+                                                senderEmail = `${senderData.name} <${senderData.email}>`;
+                                            }
+                                        }
+
+                                        await userResend.emails.send({
+                                            from: senderEmail,
+                                            to: emailAddr,
+                                            subject: subjectLine,
+                                            html: htmlContent
+                                        });
+
+                                        console.log(`[Ingest] Instant email sent to ${emailAddr} from ${senderEmail}`);
                                     }
                                 }
+                            } else if (firstStep.type === 'add_tag') {
+                                // Execute tag addition instantly
+                                const tagName = firstStep.config?.tag;
+                                if (tagName && contact && (contact as any).id) {
+                                    let tagId;
+                                    const { data: existingTag } = await supabaseAdmin
+                                        .from('tags')
+                                        .select('id')
+                                        .eq('user_id', keyRecord.user_id)
+                                        .eq('name', tagName)
+                                        .single();
 
-                                await userResend.emails.send({
-                                    from: senderEmail,
-                                    to: emailAddr,
-                                    subject: subjectLine,
-                                    html: htmlContent
-                                });
+                                    if (existingTag) {
+                                        tagId = existingTag.id;
+                                    } else {
+                                        const { data: newTag } = await supabaseAdmin
+                                            .from('tags')
+                                            .insert({ user_id: keyRecord.user_id, name: tagName })
+                                            .select('id')
+                                            .single();
+                                        if (newTag) tagId = newTag.id;
+                                    }
 
-                                console.log(`[Ingest] Instant email sent to ${emailAddr}`);
+                                    if (tagId) {
+                                        await supabaseAdmin
+                                            .from('contact_tags')
+                                            .upsert({
+                                                contact_id: (contact as any).id,
+                                                tag_id: tagId
+                                            }, { onConflict: 'contact_id, tag_id' });
+                                        console.log(`[Ingest] Instant tag '${tagName}' added to contact ${(contact as any).email}`);
+                                    }
+                                }
                             }
 
                             // Queue remaining steps (starting from step 1)
