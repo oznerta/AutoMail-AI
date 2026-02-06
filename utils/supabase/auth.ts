@@ -47,6 +47,7 @@ export async function signUpWithEmail(
         lastName?: string;
     }
 ): Promise<{ error: AuthError | null }> {
+    const supabase = createClient();
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
     const { error } = await supabase.auth.signUp({
