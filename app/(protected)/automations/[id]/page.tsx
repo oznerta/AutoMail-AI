@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Automation, updateAutomation, getAutomation, generateWebhookToken } from "../actions"
 import { getSenderIdentities } from "../../settings/actions"
@@ -35,8 +35,8 @@ type Step = {
     config: any;
 }
 
-export default function AutomationEditorPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params)
+export default function AutomationEditorPage({ params }: { params: { id: string } }) {
+    const { id } = params
     const [automation, setAutomation] = useState<Automation | null>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
