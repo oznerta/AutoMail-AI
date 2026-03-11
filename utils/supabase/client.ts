@@ -25,13 +25,33 @@ export function createClient() {
 }
 
 /**
+ * Helper to get the absolute URL for redirects
+ */
+export const getURL = () => {
+    if (typeof window !== 'undefined') {
+        return window.location.origin;
+    }
+
+    let url = process.env.NEXT_PUBLIC_SITE_URL ??
+        (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : 'http://localhost:3000');
+
+    // Make sure to include `https://` when not localhost.
+    url = url.includes('http') ? url : `https://${url}`;
+
+    // Make sure to not include a trailing `/`.
+    url = url.charAt(url.length - 1) === '/' ? url.slice(0, -1) : url;
+
+    return url;
+};
+
+/**
  * Initiates Google OAuth sign-in flow
  * 
  * @param redirectTo - Optional custom redirect path after login
  */
 export async function signInWithGoogle(redirectTo?: string) {
     const supabase = createClient();
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    const baseUrl = getURL();
 
     return supabase.auth.signInWithOAuth({
         provider: 'google',

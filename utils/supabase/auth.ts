@@ -3,7 +3,7 @@
  * Centralized auth functions for email/password authentication
  */
 
-import { createClient } from './client';
+import { createClient, getURL } from './client';
 
 export interface AuthError {
     message: string;
@@ -48,7 +48,7 @@ export async function signUpWithEmail(
     }
 ): Promise<{ error: AuthError | null }> {
     const supabase = createClient();
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    const baseUrl = getURL();
 
     const { error } = await supabase.auth.signUp({
         email,
@@ -101,7 +101,7 @@ export async function resetPassword(
     email: string
 ): Promise<{ error: AuthError | null }> {
     const supabase = createClient();
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    const baseUrl = getURL();
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${baseUrl}/auth/callback?next=/reset-password`,
