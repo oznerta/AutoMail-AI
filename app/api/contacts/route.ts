@@ -368,7 +368,17 @@ export async function POST(request: Request) {
             }
 
             if (queueItems.length > 0) {
-                await (supabase.from('automation_queue') as any).insert(queueItems);
+                const { createClient: createAdminClient } = await import('@supabase/supabase-js');
+                const adminClient = createAdminClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.SUPABASE_SERVICE_ROLE_KEY!
+                );
+                const { error: queueError } = await adminClient.from('automation_queue').insert(queueItems);
+                if (queueError) {
+                    console.error("[CreateContact] Failed to queue subsequent steps:", queueError);
+                } else {
+                    console.log(`[CreateContact] Successfully queued ${queueItems.length} subsequent step(s).`);
+                }
             }
         }
 
