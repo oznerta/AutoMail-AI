@@ -12,12 +12,17 @@ function addTime(date: Date, value: number, unit: 'minutes' | 'hours' | 'days') 
 }
 
 export async function GET(request: Request) {
-    // 0. Basic Auth Check
+    // 0. Basic Auth Check / Vercel Cron Check
     const authHeader = request.headers.get('authorization');
     const username = process.env.CRON_USERNAME;
     const password = process.env.CRON_PASSWORD;
+    const vercelCronSecret = process.env.CRON_SECRET;
 
-    if (authHeader !== `Basic ${btoa(`${username}:${password}`)}`) {
+    const isBasicAuth = authHeader === `Basic ${btoa(`${username}:${password}`)}`;
+    const isVercelCron = vercelCronSecret && authHeader === `Bearer ${vercelCronSecret}`;
+    const isLocalDev = process.env.NODE_ENV === 'development';
+
+    if (!isBasicAuth && !isVercelCron && !isLocalDev) {
         return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Secure Area"' } });
     }
 
@@ -150,177 +155,188 @@ export async function GET(request: Request) {
                         continue;
                     }
 
-                    const currentStep = steps[currentStepIndex];
+                    let shouldContinue = true;
                     let nextStepIndex = currentStepIndex;
                     let nextExecuteAt = new Date(); // Default: run next step immediately
-                    let shouldContinue = true;
 
-                    // --- EXECUTE STEP ---
-                    if (currentStep.type === 'delay') {
-                        const { value, unit } = currentStep.config;
-                        nextExecuteAt = addTime(new Date(), parseInt(value || '1'), unit || 'days');
-                        nextStepIndex++;
-                        shouldContinue = false;
-                    }
-                    if (currentStep.type === 'send_email') {
-                        if (contact && (contact as any).email) {
-                            // BYOK: Fetch User's Resend Key using relation
-                            const automationObj = Array.isArray(automation) ? automation[0] : automation;
-                            const userId = automationObj?.user_id;
+                    // --- EXECUTE STEPS LOOP ---
+                    // Run multiple instant steps sequentially in the same cron job run
+                    while (shouldContinue && nextStepIndex < steps.length) {
+                        const currentStep = steps[nextStepIndex];
+                        
+                        if (currentStep.type === 'delay') {
+                            const { value, unit } = currentStep.config;
+                            nextExecuteAt = addTime(new Date(), parseInt(value || '1'), unit || 'days');
+                            nextStepIndex++;
+                            shouldContinue = false; // Stop internal loop, wait for next cron
+                        } 
+                        else if (currentStep.type === 'send_email') {
+                            if (contact && (contact as any).email) {
+                                // BYOK: Fetch User's Resend Key using relation
+                                const automationObj = Array.isArray(automation) ? automation[0] : automation;
+                                const userId = automationObj?.user_id;
 
-                            if (!userId) {
-                                throw new Error("Could not Resolve User ID from Automation Relation");
-                            }
+                                if (!userId) {
+                                    throw new Error("Could not Resolve User ID from Automation Relation");
+                                }
 
-                            const { data: keyData } = await supabaseAdmin
-                                .from('vault_keys')
-                                .select('encrypted_value')
-                                .eq('user_id', userId)
-                                .eq('provider', 'resend')
-                                .single();
-
-                            if (!keyData) throw new Error("User has no Resend key configured.");
-
-                            // Import decrypt helper dynamically
-                            const { decrypt } = await import('@/lib/crypto');
-                            const apiKey = await decrypt(keyData.encrypted_value);
-                            const userResend = new Resend(apiKey);
-
-                            // Fetch email template from database using step config
-                            const templateId = currentStep.config?.templateId;
-                            const { data: template, error: templateError } = await supabaseAdmin
-                                .from('email_templates')
-                                .select('subject, content')
-                                .eq('id', templateId)
-                                .single();
-
-                            if (templateError || !template) {
-                                console.error(`[Cron] Failed to fetch template ${templateId}:`, templateError);
-                                throw new Error(`Template fetch failed: ${templateError?.message || 'Template not found'}`);
-                            }
-
-                            // Import shared processor
-                            const { processEmailContent } = await import('@/utils/email-processor');
-
-                            // Replace Variables
-                            const variables: Record<string, string> = {
-                                email: (contact as any).email || '',
-                                first_name: (contact as any).first_name || '',
-                                last_name: (contact as any).last_name || '',
-                                company: (contact as any).company || '',
-                                // Add more vars as schema expands
-                            };
-
-                            const htmlContent = processEmailContent(template.content || "<p>No content</p>", variables);
-                            const subjectLine = processEmailContent(template.subject || "Update", variables);
-
-                            // Dynamic Sender Configuration from step config
-                            let senderEmail = 'onboarding@resend.dev'; // Fallback
-                            const senderId = currentStep.config?.senderId;
-
-                            if (senderId) {
-                                const { data: senderData } = await supabaseAdmin
-                                    .from('sender_identities')
-                                    .select('email, name')
-                                    .eq('id', senderId)
+                                const { data: keyData } = await supabaseAdmin
+                                    .from('vault_keys')
+                                    .select('encrypted_value')
                                     .eq('user_id', userId)
+                                    .eq('provider', 'resend')
                                     .single();
 
-                                if (senderData) {
-                                    senderEmail = `${senderData.name} <${senderData.email}>`;
+                                if (!keyData) throw new Error("User has no Resend key configured.");
+
+                                // Import decrypt helper dynamically
+                                const { decrypt } = await import('@/lib/crypto');
+                                const apiKey = await decrypt(keyData.encrypted_value);
+                                const userResend = new Resend(apiKey);
+
+                                // Fetch email template from database using step config
+                                const templateId = currentStep.config?.templateId;
+                                const { data: template, error: templateError } = await supabaseAdmin
+                                    .from('email_templates')
+                                    .select('subject, content')
+                                    .eq('id', templateId)
+                                    .single();
+
+                                if (templateError || !template) {
+                                    console.error(`[Cron] Failed to fetch template ${templateId}:`, templateError);
+                                    throw new Error(`Template fetch failed: ${templateError?.message || 'Template not found'}`);
                                 }
-                            }
 
-                            try {
-                                const email = variables.email;
-                                const emailResult = await userResend.emails.send({
-                                    from: senderEmail,
-                                    to: email,
-                                    subject: subjectLine,
-                                    html: htmlContent
-                                });
-                                console.log(`[Cron] Email sent to ${email} from ${senderEmail}`, emailResult);
-                            } catch (emailError: any) {
-                                console.error(`[Cron] Email send failed:`, emailError);
-                                throw new Error(`Email send failed: ${emailError.message || 'Unknown error'}`);
-                            }
-                        }
-                        nextStepIndex++;
-                    }
+                                // Import shared processor
+                                const { processEmailContent } = await import('@/utils/email-processor');
 
-                    else if (currentStep.type === 'add_tag') {
-                        const tagName = currentStep.config.tag;
-                        if (tagName && contact && (contact as any).id) {
-                            try {
-                                // Finds or Create Tag
-                                let tagId;
-                                const { data: existingTag } = await supabaseAdmin
-                                    .from('tags')
-                                    .select('id')
-                                    .eq('user_id', automation.user_id)
-                                    .eq('name', tagName)
-                                    .single();
+                                // Replace Variables
+                                const variables: Record<string, string> = {
+                                    email: (contact as any).email || '',
+                                    first_name: (contact as any).first_name || '',
+                                    last_name: (contact as any).last_name || '',
+                                    company: (contact as any).company || '',
+                                    // Add more vars as schema expands
+                                };
 
-                                if (existingTag) {
-                                    tagId = existingTag.id;
-                                } else {
-                                    const { data: newTag } = await supabaseAdmin
-                                        .from('tags')
-                                        .insert({ user_id: automation.user_id, name: tagName })
-                                        .select('id')
+                                const htmlContent = processEmailContent(template.content || "<p>No content</p>", variables);
+                                const subjectLine = processEmailContent(template.subject || "Update", variables);
+
+                                // Dynamic Sender Configuration from step config
+                                let senderEmail = 'onboarding@resend.dev'; // Fallback
+                                const senderId = currentStep.config?.senderId;
+
+                                if (senderId) {
+                                    const { data: senderData } = await supabaseAdmin
+                                        .from('sender_identities')
+                                        .select('email, name')
+                                        .eq('id', senderId)
+                                        .eq('user_id', userId)
                                         .single();
-                                    if (newTag) tagId = newTag.id;
-                                }
 
-                                // Link to Contact
-                                if (tagId) {
-                                    await supabaseAdmin
-                                        .from('contact_tags')
-                                        .upsert({
-                                            contact_id: (contact as any).id,
-                                            tag_id: tagId
-                                        }, { onConflict: 'contact_id, tag_id' });
-                                    console.log(`[Cron] Added tag '${tagName}' to contact ${(contact as any).email}`);
-
-                                    // RECURSIVE TRIGGER: Tag Added
-                                    const { data: tagAutomations } = await supabaseAdmin
-                                        .from("automations")
-                                        .select("*")
-                                        .eq("user_id", automation.user_id)
-                                        .eq("status", "active")
-                                        .eq("trigger_type", "tag_added");
-
-                                    if (tagAutomations && tagAutomations.length > 0) {
-                                        const recursiveQueue = [];
-                                        for (const auto of tagAutomations) {
-                                            const triggerConfig = (auto.workflow_config as any)?.trigger;
-                                            const targetTag = triggerConfig?.config?.tag || triggerConfig?.tag_filter || triggerConfig?.tag;
-                                            if (!targetTag || targetTag === tagName) {
-                                                recursiveQueue.push({
-                                                    automation_id: auto.id,
-                                                    contact_id: (contact as any).id,
-                                                    status: 'pending',
-                                                    payload: { step_index: 0, trigger_data: { tag: tagName } }
-                                                });
-                                            }
-                                        }
-                                        if (recursiveQueue.length > 0) {
-                                            await supabaseAdmin.from("automation_queue").insert(recursiveQueue);
-                                            console.log(`[Cron] Chained ${recursiveQueue.length} workflows from tag '${tagName}'`);
-                                        }
+                                    if (senderData) {
+                                        senderEmail = `${senderData.name} <${senderData.email}>`;
                                     }
                                 }
-                            } catch (tagError: any) {
-                                console.error(`[Cron] Tag operation failed for '${tagName}':`, tagError);
-                                // Don't throw - continue workflow even if tagging fails
+
+                                try {
+                                    const email = variables.email;
+                                    const emailResult = await userResend.emails.send({
+                                        from: senderEmail,
+                                        to: email,
+                                        subject: subjectLine,
+                                        html: htmlContent
+                                    });
+                                    console.log(`[Cron] Email sent to ${email} from ${senderEmail}`, emailResult);
+                                } catch (emailError: any) {
+                                    console.error(`[Cron] Email send failed:`, emailError);
+                                    throw new Error(`Email send failed: ${emailError.message || 'Unknown error'}`);
+                                }
                             }
+                            nextStepIndex++;
+                            // shouldContinue remains true, move to next step instantly
                         }
-                        nextStepIndex++;
-                    }
+                        else if (currentStep.type === 'add_tag') {
+                            const tagName = currentStep.config.tag;
+                            if (tagName && contact && (contact as any).id) {
+                                try {
+                                    // Finds or Create Tag
+                                    let tagId;
+                                    const { data: existingTag } = await supabaseAdmin
+                                        .from('tags')
+                                        .select('id')
+                                        .eq('user_id', automation.user_id)
+                                        .eq('name', tagName)
+                                        .single();
+
+                                    if (existingTag) {
+                                        tagId = existingTag.id;
+                                    } else {
+                                        const { data: newTag } = await supabaseAdmin
+                                            .from('tags')
+                                            .insert({ user_id: automation.user_id, name: tagName })
+                                            .select('id')
+                                            .single();
+                                        if (newTag) tagId = newTag.id;
+                                    }
+
+                                    // Link to Contact
+                                    if (tagId) {
+                                        await supabaseAdmin
+                                            .from('contact_tags')
+                                            .upsert({
+                                                contact_id: (contact as any).id,
+                                                tag_id: tagId
+                                            }, { onConflict: 'contact_id, tag_id' });
+                                        console.log(`[Cron] Added tag '${tagName}' to contact ${(contact as any).email}`);
+
+                                        // RECURSIVE TRIGGER: Tag Added
+                                        const { data: tagAutomations } = await supabaseAdmin
+                                            .from("automations")
+                                            .select("*")
+                                            .eq("user_id", automation.user_id)
+                                            .eq("status", "active")
+                                            .eq("trigger_type", "tag_added");
+
+                                        if (tagAutomations && tagAutomations.length > 0) {
+                                            const recursiveQueue = [];
+                                            for (const auto of tagAutomations) {
+                                                const triggerConfig = (auto.workflow_config as any)?.trigger;
+                                                const targetTag = triggerConfig?.config?.tag || triggerConfig?.tag_filter || triggerConfig?.tag;
+                                                if (!targetTag || targetTag === tagName) {
+                                                    recursiveQueue.push({
+                                                        automation_id: auto.id,
+                                                        contact_id: (contact as any).id,
+                                                        status: 'pending',
+                                                        payload: { step_index: 0, trigger_data: { tag: tagName } }
+                                                    });
+                                                }
+                                            }
+                                            if (recursiveQueue.length > 0) {
+                                                await supabaseAdmin.from("automation_queue").insert(recursiveQueue);
+                                                console.log(`[Cron] Chained ${recursiveQueue.length} workflows from tag '${tagName}'`);
+                                            }
+                                        }
+                                    }
+                                } catch (tagError: any) {
+                                    console.error(`[Cron] Tag operation failed for '${tagName}':`, tagError);
+                                    // Don't throw - continue workflow even if tagging fails
+                                }
+                            }
+                            nextStepIndex++;
+                            // shouldContinue remains true, move to next step instantly
+                        } else {
+                            // Safety catch for unknown steps
+                            console.warn(`[Cron] Unknown step type: ${currentStep.type}`);
+                            nextStepIndex++;
+                        }
+                    } // End While shouldContinue
+
                     if (nextStepIndex >= steps.length) {
                         await supabaseAdmin.from('automation_queue').update({
                             status: 'completed',
-                            payload: { ...payload, step_index: nextStepIndex }
+                            payload: { ...payload, step_index: nextStepIndex },
+                            updated_at: new Date().toISOString()
                         }).eq('id', job.id);
                     } else {
                         await supabaseAdmin.from('automation_queue').update({
