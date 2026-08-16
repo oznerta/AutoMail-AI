@@ -3,6 +3,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { Globe, Shield, Cpu, Zap, CheckCircle2, Lock, Terminal } from 'lucide-react';
+import { useOrigin } from '@/hooks/use-origin';
 
 // --- 3D TILT CARD WRAPPER ---
 function TiltCard({ children, className, containerClassName }: { children: React.ReactNode, className?: string, containerClassName?: string }) {
@@ -124,6 +125,8 @@ function AIEngine() {
 }
 
 export default function BentoGrid() {
+    const origin = useOrigin();
+
     return (
         <section className="py-24 bg-black relative z-10 border-t border-white/5">
             <div className="container px-4 md:px-6 max-w-[1400px]">
@@ -163,7 +166,7 @@ export default function BentoGrid() {
                         <div className="flex flex-col h-full bg-black/40">
                             <div className="flex items-center gap-2 text-zinc-400 p-6 pb-2 border-b border-white/5">
                                 <Terminal className="h-4 w-4" />
-                                <span className="text-xs font-mono uppercase tracking-wider">System Logs</span>
+                                <span className="text-xs font-mono uppercase tracking-wider">Live Trace</span>
                             </div>
                             <div className="flex-1 overflow-hidden relative">
                                 <div className="absolute inset-0 bg-green-500/5 animate-pulse pointer-events-none"></div>
@@ -172,28 +175,22 @@ export default function BentoGrid() {
                         </div>
                     </TiltCard>
 
-                    {/* Card 3: BYOK (Tall) */}
+                    {/* Card 3: Enterprise Ready */}
                     <TiltCard containerClassName="md:col-span-1 row-span-1">
-                        <div className="relative z-10 p-8 h-full flex flex-col">
-                            <div className="flex items-center gap-2 text-zinc-400 mb-4">
-                                <Shield className="h-4 w-4" />
-                                <span className="text-xs font-mono uppercase tracking-wider">Data Sovereignty</span>
+                        <div className="flex flex-col justify-between p-8 h-full">
+                            <div className="flex items-center gap-2 text-zinc-400 mb-2">
+                                <Lock className="h-4 w-4" />
+                                <span className="text-xs font-mono uppercase tracking-wider">Security</span>
                             </div>
-                            <div className="text-2xl font-bold text-white mb-auto">Bring Your Own Keys</div>
-
-                            <div className="space-y-4 mt-8">
-                                <div className="flex items-center gap-3 group">
-                                    <div className="h-8 w-8 rounded-full bg-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        <Lock className="h-4 w-4 text-emerald-400" />
-                                    </div>
-                                    <span className="text-zinc-300 text-sm">Supabase Direct</span>
-                                </div>
-                                <div className="flex items-center gap-3 group">
-                                    <div className="h-8 w-8 rounded-full bg-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                                    </div>
-                                    <span className="text-zinc-300 text-sm">OpenAI API Key</span>
-                                </div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-white mb-2">Enterprise Vault</h3>
+                                <p className="text-zinc-500 text-sm">
+                                    AES-256 encrypted key storage with zero-knowledge architecture.
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2 text-emerald-400 font-mono text-xs mt-4">
+                                <CheckCircle2 className="h-4 w-4" />
+                                <span>SOC2 Type II Ready</span>
                             </div>
                         </div>
                     </TiltCard>
@@ -214,7 +211,7 @@ export default function BentoGrid() {
 
                             <div className="bg-black/50 p-5 rounded-lg font-mono text-[10px] md:text-xs border border-white/10 shadow-2xl skew-x-[-2deg] group-hover:skew-x-0 transition-all duration-300 w-full md:w-[55%] relative overflow-hidden">
                                 <div className="absolute top-0 right-0 p-2 opacity-50"><div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div></div>
-                                <div className="text-zinc-500 select-none mb-2">// POST https://automailai.mattrenzo.com/api/ingest</div>
+                                <div className="text-zinc-500 select-none mb-2">// POST {origin}/api/ingest</div>
                                 <div className="text-purple-400">await <span className="text-yellow-300">fetch</span>(url, {'{'}</div>
                                 <div className="pl-4 text-blue-300">method: <span className="text-green-300">'POST'</span>,</div>
                                 <div className="pl-4 text-blue-300">headers: {'{'} <span className="text-green-300">'Authorization'</span>: <span className="text-orange-300">'Bearer sk_live_...'</span> {'}'},</div>

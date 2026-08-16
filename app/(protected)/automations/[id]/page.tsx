@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
+import { getURL } from "@/utils/supabase/client"
 
 // Types for our local state
 type TriggerConfig = {
@@ -144,8 +145,8 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
     if (loading) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-muted-foreground" /></div>
     if (!automation) return <div className="p-8">Automation not found</div>
 
-    // Construct Webhook URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    // Construct Webhook URL automatically from active domain
+    const baseUrl = getURL();
     const webhookUrl = baseUrl
         ? `${baseUrl}/api/hooks/${automation.id}?token=${(automation as any).webhook_token || ''}`
         : '';

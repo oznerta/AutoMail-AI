@@ -25,18 +25,31 @@ export function createClient() {
 }
 
 /**
- * Helper to get the absolute URL for redirects
+ * Helper to get the absolute URL for redirects, OAuth callbacks, and API calls.
+ * Automatically detects the current origin in browser environments,
+ * and dynamically infers Vercel / environment settings on the server.
  */
 export const getURL = () => {
-    let url = process.env.NEXT_PUBLIC_APP_URL ?? 
-             process.env.NEXT_PUBLIC_SITE_URL ??
-             (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : 'http://localhost:3000');
+    // 1. Client-side browser: Always automatically use the active origin
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        return window.location.origin;
+    }
+
+    // 2. Server-side: Determine URL from environment variables
+    let url =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (process.env.NEXT_PUBLIC_VERCEL_URL
+            ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+            : process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}`
+            : 'http://localhost:3000');
 
     // Make sure to include `https://` when not localhost.
     url = url.includes('http') ? url : `https://${url}`;
 
     // Make sure to not include a trailing `/`.
-    url = url.charAt(url.length - 1) === '/' ? url.slice(0, -1) : url;
+    url = url.endsWith('/') ? url.slice(0, -1) : url;
 
     return url;
 };

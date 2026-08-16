@@ -1,5 +1,11 @@
 
+"use client";
+
+import { useOrigin } from "@/hooks/use-origin";
+
 export default function ApiWebhooksPage() {
+    const origin = useOrigin();
+
     return (
         <div className="space-y-6">
             <div className="space-y-2">
@@ -49,7 +55,7 @@ export default function ApiWebhooksPage() {
                 <h3 className="text-xl font-semibold">Example Request</h3>
                 <div className="rounded-md bg-zinc-950 p-4 overflow-x-auto">
                     <pre className="text-sm text-zinc-50">
-                        {`curl -X POST "https://automailai.mattrenzo.com/api/automations/123-abc/trigger?key=YOUR_API_KEY" \\
+                        {`curl -X POST "${origin}/api/automations/123-abc/trigger?key=YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "email": "customer@example.com",
@@ -61,3 +67,4 @@ export default function ApiWebhooksPage() {
         </div>
     )
 }
+

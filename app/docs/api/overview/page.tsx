@@ -1,5 +1,11 @@
 
+"use client";
+
+import { useOrigin } from "@/hooks/use-origin";
+
 export default function ApiOverviewPage() {
+    const origin = useOrigin();
+
     return (
         <div className="space-y-6">
             <div className="space-y-2">
@@ -19,7 +25,7 @@ export default function ApiOverviewPage() {
                     Pass the API key as a query parameter <code>?key=YOUR_API_KEY</code> for GET/POST requests.
                 </p>
                 <div className="rounded-md bg-muted p-4">
-                    <code className="text-sm">https://automailai.mattrenzo.com/api/ingest?key=sk_live_...</code>
+                    <code className="text-sm">{origin}/api/ingest?key=sk_live_...</code>
                 </div>
             </div>
 
@@ -29,9 +35,10 @@ export default function ApiOverviewPage() {
                     The base URL for all API requests is your hosted domain:
                 </p>
                 <div className="rounded-md bg-muted p-4">
-                    <code className="text-sm">https://automailai.mattrenzo.com/api</code>
+                    <code className="text-sm">{origin}/api</code>
                 </div>
             </div>
         </div>
     )
 }
+

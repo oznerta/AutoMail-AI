@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { QuickStartWebhookSnippet } from "@/components/docs/quick-start-webhook-snippet"
 
 export const metadata = {
     title: "Quick Start | AutoMail AI Docs",
@@ -80,13 +81,7 @@ export default function QuickStartPage() {
                         <p>
                             If you chose "Webhook" ensuring you have the URL:
                         </p>
-                        <pre className="bg-muted p-4 rounded-md overflow-x-auto">
-                            <code>
-                                {`curl -X POST https://automailai.mattrenzo.com/api/webhooks/YOUR_TOKEN \\
-  -H "Content-Type: application/json" \\
-  -d '{ "email": "you@example.com", "first_name": "Developer" }'`}
-                            </code>
-                        </pre>
+                        <QuickStartWebhookSnippet />
                         <p className="text-sm text-muted-foreground">
                             Check your inbox! You should receive the personalized welcome email.
                         </p>

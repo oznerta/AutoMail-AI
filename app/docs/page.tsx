@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button"
 import { ArrowRight, Terminal, Zap, Mail, Database, Bot } from "lucide-react"
 import Link from "next/link"
 import { SpotlightCard } from "@/components/ui/spotlight-card";
+import { useOrigin } from "@/hooks/use-origin";
 
 export default function DocsPage() {
+    const origin = useOrigin();
     return (
         <div className="space-y-12 w-full max-w-[1200px]">
             {/* Hero Section */}
@@ -110,7 +112,7 @@ export default function DocsPage() {
                                 High-throughput event ingestion. Push contacts and events directly from your backend.
                             </p>
                             <div className="mt-4 text-xs font-mono bg-muted/50 p-2 rounded text-muted-foreground">
-                                POST https://automailai.mattrenzo.com/api/ingest
+                                POST {origin}/api/ingest
                             </div>
                         </SpotlightCard>
                     </Link>
