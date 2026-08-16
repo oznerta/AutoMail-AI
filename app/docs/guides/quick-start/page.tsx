@@ -82,7 +82,7 @@ export default function QuickStartPage() {
                         </p>
                         <pre className="bg-muted p-4 rounded-md overflow-x-auto">
                             <code>
-                                {`curl -X POST https://automailai.vercel.app/api/webhooks/YOUR_TOKEN \\
+                                {`curl -X POST https://automailai.mattrenzo.com/api/webhooks/YOUR_TOKEN \\
   -H "Content-Type: application/json" \\
   -d '{ "email": "you@example.com", "first_name": "Developer" }'`}
                             </code>

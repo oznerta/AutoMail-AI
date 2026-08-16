@@ -110,7 +110,7 @@ export default function DocsPage() {
                                 High-throughput event ingestion. Push contacts and events directly from your backend.
                             </p>
                             <div className="mt-4 text-xs font-mono bg-muted/50 p-2 rounded text-muted-foreground">
-                                POST https://automailai.vercel.app/api/ingest
+                                POST https://automailai.mattrenzo.com/api/ingest
                             </div>
                         </SpotlightCard>
                     </Link>
