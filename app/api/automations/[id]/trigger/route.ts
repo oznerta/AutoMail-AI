@@ -87,12 +87,30 @@ export async function POST(
             .eq('user_id', automation.user_id)
             .eq('email', email)
             .single();
-        if (contact) contactId = contact.id;
+            
+        if (contact) {
+            contactId = contact.id;
+        } else {
+            // Auto-create contact from trigger payload if new
+            const { data: newContact } = await supabaseAdmin
+                .from('contacts')
+                .insert({
+                    user_id: automation.user_id,
+                    email,
+                    first_name: body.first_name || null,
+                    last_name: body.last_name || null,
+                    source: 'automation_trigger',
+                    status: 'active'
+                })
+                .select('id')
+                .single();
+            if (newContact) contactId = newContact.id;
+        }
     }
 
     if (!contactId) {
         return NextResponse.json(
-            { error: "Payload must contain 'email' (of existing contact) or 'contact_id'" },
+            { error: "Payload must contain 'email' or valid 'contact_id'" },
             { status: 400 }
         );
     }

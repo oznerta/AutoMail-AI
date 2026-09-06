@@ -15,7 +15,7 @@ export type Json =
     | { [key: string]: Json | undefined }
     | Json[]
 
-export interface Database {
+export type Database = {
     public: {
         Tables: {
             profiles: {
@@ -46,6 +46,7 @@ export interface Database {
                     created_at?: string
                     updated_at?: string
                 }
+                Relationships: []
             }
             vault_keys: {
                 Row: {
@@ -84,6 +85,7 @@ export interface Database {
                     updated_at?: string
                     last_used_at?: string | null
                 }
+                Relationships: []
             }
             contacts: {
                 Row: {
@@ -93,6 +95,7 @@ export interface Database {
                     first_name: string | null
                     last_name: string | null
                     company: string | null
+                    phone: string | null
                     tags: string[]
                     custom_fields: Json
                     status: 'active' | 'unsubscribed' | 'bounced'
@@ -108,6 +111,7 @@ export interface Database {
                     first_name?: string | null
                     last_name?: string | null
                     company?: string | null
+                    phone?: string | null
                     tags?: string[]
                     custom_fields?: Json
                     status?: 'active' | 'unsubscribed' | 'bounced'
@@ -123,6 +127,7 @@ export interface Database {
                     first_name?: string | null
                     last_name?: string | null
                     company?: string | null
+                    phone?: string | null
                     tags?: string[]
                     custom_fields?: Json
                     status?: 'active' | 'unsubscribed' | 'bounced'
@@ -131,6 +136,7 @@ export interface Database {
                     updated_at?: string
                     last_contacted_at?: string | null
                 }
+                Relationships: []
             }
             automations: {
                 Row: {
@@ -196,6 +202,7 @@ export interface Database {
                     created_at?: string
                     updated_at?: string
                 }
+                Relationships: []
             }
             webhook_keys: {
                 Row: {
@@ -231,6 +238,7 @@ export interface Database {
                     created_at?: string
                     updated_at?: string
                 }
+                Relationships: []
             },
             email_templates: {
                 Row: {
@@ -260,6 +268,7 @@ export interface Database {
                     created_at?: string
                     updated_at?: string
                 }
+                Relationships: []
             },
             sender_identities: {
                 Row: {
@@ -289,13 +298,118 @@ export interface Database {
                     created_at?: string
                     updated_at?: string
                 }
+                Relationships: []
+            },
+            automation_queue: {
+                Row: {
+                    id: string
+                    automation_id: string
+                    contact_id: string
+                    status: 'pending' | 'processing' | 'completed' | 'failed'
+                    execute_at: string | null
+                    payload: Json
+                    error_message: string | null
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    automation_id: string
+                    contact_id: string
+                    status?: 'pending' | 'processing' | 'completed' | 'failed'
+                    execute_at?: string | null
+                    payload?: Json
+                    error_message?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    id?: string
+                    automation_id?: string
+                    contact_id?: string
+                    status?: 'pending' | 'processing' | 'completed' | 'failed'
+                    execute_at?: string | null
+                    payload?: Json
+                    error_message?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Relationships: []
+            },
+            tags: {
+                Row: {
+                    id: string
+                    user_id: string
+                    name: string
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    user_id: string
+                    name: string
+                    created_at?: string
+                }
+                Update: {
+                    id?: string
+                    user_id?: string
+                    name?: string
+                    created_at?: string
+                }
+                Relationships: []
+            },
+            contact_tags: {
+                Row: {
+                    contact_id: string
+                    tag_id: string
+                    created_at: string
+                }
+                Insert: {
+                    contact_id: string
+                    tag_id: string
+                    created_at?: string
+                }
+                Update: {
+                    contact_id?: string
+                    tag_id?: string
+                    created_at?: string
+                }
+                Relationships: []
+            },
+            custom_field_definitions: {
+                Row: {
+                    id: string
+                    user_id: string
+                    name: string
+                    type: string
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    user_id: string
+                    name: string
+                    type?: string
+                    created_at?: string
+                }
+                Update: {
+                    id?: string
+                    user_id?: string
+                    name?: string
+                    type?: string
+                    created_at?: string
+                }
+                Relationships: []
             }
         }
         Views: {
             [_ in never]: never
         }
         Functions: {
-            [_ in never]: never
+            claim_automation_jobs: {
+                Args: {
+                    batch_size: number
+                }
+                Returns: Database['public']['Tables']['automation_queue']['Row'][]
+            }
         }
         Enums: {
             [_ in never]: never

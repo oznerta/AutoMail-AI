@@ -33,7 +33,14 @@ export async function createWebhookKey(name: string) {
 
 export async function revokeWebhookKey(id: string) {
     const supabase = await createClient() as any;
-    const { error } = await supabase.from('webhook_keys').delete().eq('id', id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const { error } = await supabase
+        .from('webhook_keys')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
 
     if (error) return { error: error.message };
     revalidatePath('/settings');
@@ -110,7 +117,15 @@ export async function addSenderIdentity(name: string, email: string) {
 
 export async function deleteSenderIdentity(id: string) {
     const supabase = await createClient() as any;
-    const { error } = await supabase.from('sender_identities').delete().eq('id', id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const { error } = await supabase
+        .from('sender_identities')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
     if (error) return { error: error.message };
     revalidatePath('/settings');
     return { success: true };

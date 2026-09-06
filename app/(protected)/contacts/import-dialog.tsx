@@ -33,6 +33,7 @@ const SYSTEM_FIELDS = [
     { label: 'Last Name', value: 'last_name' },
     { label: 'Company Name', value: 'company' },
     { label: 'Phone Number', value: 'phone' },
+    { label: 'Tags (comma separated)', value: 'tags' },
 ];
 
 export function ImportContactsDialog() {
@@ -75,6 +76,7 @@ export function ImportContactsDialog() {
                         else if (lower.includes('last') && lower.includes('name')) initialMap[h] = 'last_name';
                         else if (lower.includes('company')) initialMap[h] = 'company';
                         else if (lower.includes('phone')) initialMap[h] = 'phone';
+                        else if (lower.includes('tag')) initialMap[h] = 'tags';
                         else initialMap[h] = '';
                     });
                     setFieldMapping(initialMap);
@@ -99,10 +101,18 @@ export function ImportContactsDialog() {
 
         // Transform Data
         const normalizedContacts = csvData.map(row => {
-            const mapped: any = {};
+            const mapped: Record<string, any> = { custom_fields: {} };
             Object.entries(fieldMapping).forEach(([header, sysField]) => {
                 if (sysField) {
-                    mapped[sysField] = row[header];
+                    if (sysField === 'tags') {
+                        mapped.tags = typeof row[header] === 'string'
+                            ? row[header].split(/[,;]/).map((t: string) => t.trim()).filter(Boolean)
+                            : [];
+                    } else {
+                        mapped[sysField] = row[header];
+                    }
+                } else if (header.trim() && row[header] !== undefined && row[header] !== '') {
+                    mapped.custom_fields[header.trim()] = row[header];
                 }
             });
             return mapped;

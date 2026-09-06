@@ -23,8 +23,12 @@ export default function OnboardingPage() {
     const [isCompleting, setIsCompleting] = useState(false);
     const { toast } = useToast();
 
+    // If step > TOTAL_STEPS, trigger completion
+    const [stepExceeded, setStepExceeded] = useState(false);
+
     // Final completion - save status and redirect
     const handleFinish = async () => {
+        if (isCompleting) return;
         setIsCompleting(true);
         try {
             await completeOnboarding();
@@ -35,15 +39,19 @@ export default function OnboardingPage() {
         }
     };
 
-    // If step > TOTAL_STEPS, we are done
-    if (step > TOTAL_STEPS) {
-        // Render nothing, or a loading state if we want better UX
-        // But preventing the loop calls here is actually important. 
-        // We should trigger handleFinish only ONCE if we use an effect, 
-        // OR just rely on the last step calling handleFinish directly.
-        // The original logic called handleFinish in render which is bad.
-        // Let's remove this render-time check and ensure handleFinish is called by button click.
-        return null;
+    if (step > TOTAL_STEPS || isCompleting) {
+        if (!isCompleting && !stepExceeded) {
+            setStepExceeded(true);
+            handleFinish();
+        }
+        return (
+            <div className="flex h-screen w-full items-center justify-center bg-background">
+                <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-sm text-muted-foreground">Completing setup and preparing your dashboard...</p>
+                </div>
+            </div>
+        );
     }
 
     return (

@@ -57,38 +57,58 @@ export async function GET(request: Request) {
             console.log(`Exploding Campaign: ${campaign.name} (${campaign.id})`);
 
             // Fetch Audience
-            // TODO: Handle Tags (campaign.segment_config.type === 'tag')
-            // For now, assuming ALL
-            const { data: contacts, error: contactError } = await supabaseAdmin
+            let contactQuery = supabaseAdmin
                 .from('contacts')
                 .select('id')
+                .eq('user_id', campaign.user_id)
                 .eq('status', 'active');
 
+            // Handle tag segmentation if configured
+            const segmentConfig = campaign.segment_config;
+            if (
+                segmentConfig &&
+                segmentConfig.type === 'tag' &&
+                Array.isArray(segmentConfig.value) &&
+                segmentConfig.value.length > 0
+            ) {
+                // Filter contacts that contain any of the selected segment tags
+                contactQuery = contactQuery.overlaps('tags', segmentConfig.value);
+            }
+
+            const { data: contacts, error: contactError } = await contactQuery;
+
             if (!contactError && contacts) {
-                // Bulk Insert Queue Items
-                const queueItems = contacts.map(c => ({
-                    automation_id: campaign.id,
-                    contact_id: c.id,
-                    // user_id removed - inferred from automation
-                    status: 'pending',
-                    execute_at: new Date().toISOString(),
-                    payload: { step_index: 0 }
-                }));
-
-                const { error: insertError } = await supabaseAdmin
-                    .from('automation_queue')
-                    .insert(queueItems);
-
-                if (insertError) {
-                    console.error("Failed to explode campaign:", insertError);
-                } else {
-                    // Mark Campaign as Completed (delivered to queue)
+                if (contacts.length === 0) {
                     await supabaseAdmin
                         .from('automations')
-                        .update({ status: 'completed' }) // Or 'sending' if we want to track queue progress
+                        .update({ status: 'completed', updated_at: new Date().toISOString() })
                         .eq('id', campaign.id);
+                    console.log(`[Cron] Campaign ${campaign.name} (${campaign.id}) had 0 contacts. Marked as completed.`);
+                } else {
+                    // Bulk Insert Queue Items
+                    const queueItems = contacts.map(c => ({
+                        automation_id: campaign.id,
+                        contact_id: c.id,
+                        status: 'pending',
+                        execute_at: new Date().toISOString(),
+                        payload: { step_index: 0 }
+                    }));
 
-                    console.log(`Campaign exploded: ${queueItems.length} jobs created.`);
+                    const { error: insertError } = await supabaseAdmin
+                        .from('automation_queue')
+                        .insert(queueItems);
+
+                    if (insertError) {
+                        console.error("Failed to explode campaign:", insertError);
+                    } else {
+                        // Mark Campaign as Active (delivering via queue)
+                        await supabaseAdmin
+                            .from('automations')
+                            .update({ status: 'active', updated_at: new Date().toISOString() })
+                            .eq('id', campaign.id);
+
+                        console.log(`Campaign exploded: ${queueItems.length} jobs created.`);
+                    }
                 }
             }
         }
@@ -211,11 +231,16 @@ export async function GET(request: Request) {
                                 const { processEmailContent } = await import('@/utils/email-processor');
 
                                 // Replace Variables
+                                const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+                                const contactId = (contact as any)?.id || '';
+                                const unsubUrl = `${appUrl}/unsubscribe?id=${contactId}&email=${encodeURIComponent((contact as any)?.email || '')}`;
+
                                 const variables: Record<string, string> = {
                                     email: (contact as any).email || '',
                                     first_name: (contact as any).first_name || '',
                                     last_name: (contact as any).last_name || '',
                                     company: (contact as any).company || '',
+                                    unsubscribe_url: unsubUrl,
                                     // Add more vars as schema expands
                                 };
 
@@ -245,7 +270,18 @@ export async function GET(request: Request) {
                                         from: senderEmail,
                                         to: email,
                                         subject: subjectLine,
-                                        html: htmlContent
+                                        html: htmlContent,
+                                        headers: {
+                                            'X-Automation-Id': automation.id,
+                                            'X-Contact-Id': contactId,
+                                            'List-Unsubscribe': `<${unsubUrl}>`,
+                                            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                                        },
+                                        tags: [
+                                            { name: 'automation_id', value: automation.id },
+                                            { name: 'contact_id', value: contactId },
+                                            { name: 'user_id', value: automation.user_id },
+                                        ].filter(t => Boolean(t.value))
                                     });
                                     console.log(`[Cron] Email sent to ${email} from ${senderEmail}`, emailResult);
                                 } catch (emailError: any) {
@@ -386,6 +422,31 @@ export async function GET(request: Request) {
                 }
             } // End Batch For Loop
         } // End While Loop
+
+        // Check if any active campaigns have completed all their queue jobs
+        const { data: activeCampaigns } = await supabaseAdmin
+            .from('automations')
+            .select('id')
+            .eq('type', 'campaign')
+            .eq('status', 'active');
+
+        if (activeCampaigns && activeCampaigns.length > 0) {
+            for (const camp of activeCampaigns) {
+                const { count, error: queueCheckError } = await supabaseAdmin
+                    .from('automation_queue')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('automation_id', camp.id)
+                    .in('status', ['pending', 'processing']);
+
+                if (!queueCheckError && count === 0) {
+                    await supabaseAdmin
+                        .from('automations')
+                        .update({ status: 'completed', updated_at: new Date().toISOString() })
+                        .eq('id', camp.id);
+                    console.log(`[Cron] Campaign ${camp.id} completed: all queue jobs finished.`);
+                }
+            }
+        }
 
         return NextResponse.json({ success: true, processed: processedCount });
 

@@ -35,8 +35,16 @@ import {
     Settings,
     Maximize2,
     Minimize2,
-    Send
+    Send,
+    Download,
+    Upload
 } from "lucide-react"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -144,6 +152,26 @@ export function EditorClient({ template }: { template: Template }) {
     // For inserting variables at cursor position
     const editorRef = useRef<any>(null)
 
+    // Dynamic custom variables from user custom field definitions
+    const [customVariables, setCustomVariables] = useState<{ label: string; value: string; key: string }[]>([])
+
+    useEffect(() => {
+        fetch('/api/data/definitions')
+            .then(res => res.json())
+            .then(data => {
+                if (data.definitions && Array.isArray(data.definitions)) {
+                    setCustomVariables(data.definitions.map((d: { name: string }) => ({
+                        label: d.name,
+                        value: `{{${d.name}}}`,
+                        key: d.name
+                    })))
+                }
+            })
+            .catch(err => console.error("Failed to load custom fields:", err))
+    }, [])
+
+    const allVariables = [...SAMPLE_VARIABLES, ...customVariables]
+
     const handleEditorDidMount = (editor: any, monaco: any) => {
         editorRef.current = editor
 
@@ -160,10 +188,10 @@ export function EditorClient({ template }: { template: Template }) {
                 };
 
                 return {
-                    suggestions: SAMPLE_VARIABLES.map((v) => ({
+                    suggestions: allVariables.map((v) => ({
                         label: v.label,
                         kind: monaco.languages.CompletionItemKind.Variable,
-                        insertText: v.value, // Insert the full {{...}}
+                        insertText: v.value,
                         documentation: "Insert variable: " + v.value,
                         range: range,
                     })),
@@ -175,19 +203,26 @@ export function EditorClient({ template }: { template: Template }) {
     const insertTextAtCursor = (text: string) => {
         if (editorRef.current) {
             const editor = editorRef.current;
-            const contribution = editor.getContribution('snippetController2');
-            if (contribution) {
-                // Insert variable at cursor
-                editor.trigger('keyboard', 'type', { text: text });
-                editor.focus();
-            } else {
-                // Fallback
-                const position = editor.getPosition();
-                editor.executeEdits('', [{
-                    range: new window.monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+            const position = editor.getPosition();
+            if (position) {
+                editor.executeEdits('insert-variable', [{
+                    range: {
+                        startLineNumber: position.lineNumber,
+                        startColumn: position.column,
+                        endLineNumber: position.lineNumber,
+                        endColumn: position.column
+                    },
                     text: text,
                     forceMoveMarkers: true
                 }]);
+                editor.setPosition({
+                    lineNumber: position.lineNumber,
+                    column: position.column + text.length
+                });
+                editor.focus();
+            } else {
+                editor.trigger('keyboard', 'type', { text: text });
+                editor.focus();
             }
         }
     }
@@ -215,6 +250,78 @@ export function EditorClient({ template }: { template: Template }) {
             setIsSaving(false)
         }
     }
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleExportHtml = () => {
+        const blob = new Blob([content], { type: 'text/html;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        const safeName = name.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'template';
+        link.setAttribute('download', `${safeName}.html`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast({ title: "Exported", description: "HTML template downloaded successfully." });
+    };
+
+    const handleExportJson = () => {
+        const payload = {
+            version: "1.0",
+            type: "automail_email_template",
+            name,
+            subject,
+            content,
+            exportedAt: new Date().toISOString(),
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        const safeName = name.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'template';
+        link.setAttribute('download', `${safeName}_recipe.json`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast({ title: "Exported", description: "Template recipe JSON downloaded." });
+    };
+
+    const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const result = event.target?.result as string;
+            if (!result) return;
+
+            if (file.name.endsWith('.json')) {
+                try {
+                    const parsed = JSON.parse(result);
+                    if (parsed.content !== undefined) {
+                        setContent(parsed.content);
+                        if (parsed.name) setName(parsed.name);
+                        if (parsed.subject) setSubject(parsed.subject);
+                        toast({ title: "Import Successful", description: "Template recipe imported." });
+                    } else {
+                        toast({ title: "Invalid Recipe", description: "JSON must contain a 'content' field.", variant: "destructive" });
+                    }
+                } catch (err) {
+                    toast({ title: "Parse Error", description: "Failed to parse JSON file.", variant: "destructive" });
+                }
+            } else {
+                setContent(result);
+                toast({ title: "Import Successful", description: "HTML template content loaded." });
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    };
 
     const handleImageSelect = (url: string) => {
         // Simple <img> tag insertion
@@ -463,6 +570,41 @@ export function EditorClient({ template }: { template: Template }) {
                         </DialogContent>
                     </Dialog>
 
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileImport}
+                        accept=".html,.htm,.json"
+                        className="hidden"
+                    />
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="mr-2 shrink-0"
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Import
+                    </Button>
+
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="mr-2 shrink-0">
+                                <Download className="mr-2 h-4 w-4" />
+                                Export
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={handleExportHtml}>
+                                Export as HTML (.html)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleExportJson}>
+                                Export as Template Recipe (.json)
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
                     <Button onClick={handleSave} disabled={isSaving} size="sm" className="shrink-0">
                         {isSaving ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -491,9 +633,26 @@ export function EditorClient({ template }: { template: Template }) {
                 <div className={`flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 h-full transition-all duration-300`}>
                     {/* Left: Code Editor */}
                     <div className={`border rounded-xl overflow-hidden flex flex-col h-full shadow-sm ${(viewMode === 'preview') ? 'hidden' : (viewMode === 'code' ? 'col-span-2' : '')}`}>
-                        <div className="bg-muted/50 p-2 border-b flex items-center justify-between backdrop-blur-sm">
-                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground pl-2">
-                                <Code className="h-3 w-3 text-primary" /> HTML
+                        <div className="bg-muted/50 px-3 py-2 border-b flex flex-wrap items-center justify-between gap-2 backdrop-blur-sm">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                                <Code className="h-3.5 w-3.5 text-primary" /> HTML Source
+                            </div>
+                            {/* Merge Variables Quick Bar */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-full">
+                                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 mr-1 shrink-0">
+                                    <Braces className="h-3 w-3 text-primary" /> Merge:
+                                </span>
+                                {allVariables.map((v) => (
+                                    <button
+                                        key={v.key}
+                                        type="button"
+                                        onClick={() => insertTextAtCursor(v.value)}
+                                        className="inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-mono border border-border bg-background/80 hover:bg-primary/10 hover:text-primary hover:border-primary/50 text-foreground transition-all shrink-0 cursor-pointer shadow-xs active:scale-95"
+                                        title={`Insert ${v.value} at cursor`}
+                                    >
+                                        {`{{${v.key}}}`}
+                                    </button>
+                                ))}
                             </div>
                         </div>
                         <div className="flex-1 relative">

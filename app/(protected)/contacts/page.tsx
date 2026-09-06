@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { ImportContactsDialog } from "./import-dialog";
 import * as React from "react";
@@ -247,20 +247,43 @@ export default function ContactsPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
+    const sanitizeCsvCell = (val: any): string => {
+        if (val === null || val === undefined) return '';
+        const str = String(val);
+        if (/^[=+\-@\t\r]/.test(str)) {
+            return `'${str}`;
+        }
+        return str;
+    };
+
     const handleExport = () => {
-        if (!filteredContacts.length) return;
+        if (!filteredContacts.length) {
+            toast.error("No contacts to export");
+            return;
+        }
 
-        const csv = Papa.unparse(filteredContacts.map(c => ({
-            Email: c.email,
-            FirstName: c.first_name || '',
-            LastName: c.last_name || '',
-            Company: c.company || '',
-            Tags: c.tags.join(', '),
-            Status: c.status,
-            Created: new Date(c.created_at).toLocaleDateString(),
-            ...c.custom_fields
-        })));
+        const exportData = filteredContacts.map(c => {
+            const row: Record<string, string> = {
+                Email: sanitizeCsvCell(c.email),
+                FirstName: sanitizeCsvCell(c.first_name || ''),
+                LastName: sanitizeCsvCell(c.last_name || ''),
+                Company: sanitizeCsvCell(c.company || ''),
+                Phone: sanitizeCsvCell((c as any).phone || ''),
+                Tags: sanitizeCsvCell((Array.isArray(c.tags) ? c.tags : []).join(', ')),
+                Status: sanitizeCsvCell(c.status),
+                Created: sanitizeCsvCell(new Date(c.created_at).toLocaleDateString()),
+            };
 
+            if (c.custom_fields && typeof c.custom_fields === 'object') {
+                Object.entries(c.custom_fields).forEach(([k, v]) => {
+                    row[k] = sanitizeCsvCell(v);
+                });
+            }
+
+            return row;
+        });
+
+        const csv = Papa.unparse(exportData);
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
@@ -270,6 +293,8 @@ export default function ContactsPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast.success(`Exported ${filteredContacts.length} contacts`);
     };
 
     const allCurrentTags = Array.from(new Set(contacts.flatMap(c => c.tags || []))).sort();

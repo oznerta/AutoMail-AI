@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Save, Play, Pause, Loader2 } from "lucide-react"
+import { ArrowLeft, Save, Play, Pause, Loader2, Download, Upload } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
 import { TriggerPanel } from "./trigger-panel"
@@ -56,6 +56,62 @@ export function AutomationEditorClient({
         }
     }
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleExportRecipe = () => {
+        const payload = {
+            version: "1.0",
+            type: "automail_workflow_recipe",
+            name,
+            workflow_config: config,
+            exportedAt: new Date().toISOString(),
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        const safeName = name.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'workflow';
+        link.setAttribute('download', `${safeName}_recipe.json`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast({ title: "Exported", description: "Workflow recipe downloaded successfully." });
+    };
+
+    const handleImportRecipe = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const result = event.target?.result as string;
+            if (!result) return;
+
+            try {
+                const parsed = JSON.parse(result);
+                const importedConfig = parsed.workflow_config || parsed;
+                if (importedConfig.steps || importedConfig.trigger) {
+                    setConfig({
+                        trigger: importedConfig.trigger || {},
+                        steps: Array.isArray(importedConfig.steps) ? importedConfig.steps : []
+                    });
+                    if (parsed.name && typeof parsed.name === 'string') {
+                        setName(parsed.name);
+                    }
+                    toast({ title: "Import Successful", description: "Workflow recipe imported." });
+                } else {
+                    toast({ title: "Invalid Recipe", description: "File does not contain valid workflow steps or trigger.", variant: "destructive" });
+                }
+            } catch (err) {
+                toast({ title: "Parse Error", description: "Failed to parse JSON recipe file.", variant: "destructive" });
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    };
+
     const toggleStatus = async () => {
         const newStatus = status === 'active' ? 'paused' : 'active'
         setStatus(newStatus)
@@ -93,10 +149,25 @@ export function AutomationEditorClient({
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={toggleStatus}>
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleImportRecipe}
+                        accept=".json"
+                        className="hidden"
+                    />
+                    <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Import Recipe
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleExportRecipe}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export Recipe
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={toggleStatus}>
                         {status === 'active' ? "Pause" : "Activate"}
                     </Button>
-                    <Button onClick={handleSave} disabled={isSaving}>
+                    <Button onClick={handleSave} disabled={isSaving} size="sm">
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                         Save Changes
                     </Button>

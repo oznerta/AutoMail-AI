@@ -85,12 +85,7 @@ export async function createTemplate(name: string): Promise<ActionState & { id?:
     }
 
     revalidatePath('/email-builder');
-    // We return the ID so the client can redirect, or we can redirect here.
-    // Redirecting from server action is fine, but handling it in client gives better loading states.
-    // For now, let's redirect to be consistent with previous implementation, 
-    // BUT typically returning success/id is better for "Quick Create" flows.
-    // I'll keep the redirect for the main flow, but we can refactor the client to handle it if needed.
-    redirect(`/email-builder/${data.id}`);
+    return { success: true, id: data.id };
 }
 
 export async function deleteTemplate(id: string): Promise<ActionState> {
@@ -173,13 +168,13 @@ const ChatMessageSchema = z.object({
 
 const CleanedGenerateContentSchema = z.object({
     messages: z.array(ChatMessageSchema),
-    model: z.enum(["gpt-5.2", "gpt-5-mini", "o1-preview", "o1-mini", "gpt-4o"]).optional().default("gpt-5.2"),
+    model: z.enum(["gpt-4o", "gpt-4o-mini", "o1-mini", "o3-mini"]).optional().default("gpt-4o"),
     currentContent: z.string().optional() // New: Pass current editor state for context
 });
 
 export async function generateEmailContent(
     messages: { role: "user" | "assistant" | "system", content: string }[],
-    model: string = "gpt-5.2",
+    model: string = "gpt-4o",
     currentContent?: string
 ): Promise<ActionState & { content?: string }> {
     const supabase = await createClient() as any;

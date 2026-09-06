@@ -34,7 +34,7 @@ export function AiChatPanel({ open, onOpenChange, currentContent, onApply }: AiC
     const [messages, setMessages] = useState<Message[]>([])
     const [input, setInput] = useState("")
     const [isLoading, setIsLoading] = useState(false)
-    const [model, setModel] = useState("gpt-5.2")
+    const [model, setModel] = useState("gpt-4o")
     const scrollRef = useRef<HTMLDivElement>(null)
     const { toast } = useToast()
 
@@ -56,9 +56,9 @@ export function AiChatPanel({ open, onOpenChange, currentContent, onApply }: AiC
         try {
             // Convert UI messages to API format (including current user msg)
             const apiMessages = [...messages, userMsg].map(m => ({
-                role: m.role,
+                role: m.role as "user" | "assistant" | "system",
                 content: m.content
-            })) as any
+            }))
 
             const result = await generateEmailContent(apiMessages, model, currentContent)
 
@@ -108,10 +108,10 @@ export function AiChatPanel({ open, onOpenChange, currentContent, onApply }: AiC
                                 <SelectValue placeholder="Select Model" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="gpt-5.2">GPT-5.2 (Best)</SelectItem>
-                                <SelectItem value="gpt-5-mini">GPT-5 Mini (Fast)</SelectItem>
-                                <SelectItem value="o1-preview">o1-preview (Deep Think)</SelectItem>
-                                <SelectItem value="gpt-4o">GPT-4o (Legacy)</SelectItem>
+                                <SelectItem value="gpt-4o">GPT-4o (Most Intelligent)</SelectItem>
+                                <SelectItem value="gpt-4o-mini">GPT-4o Mini (Fast & Efficient)</SelectItem>
+                                <SelectItem value="o1-mini">o1-mini (Reasoning)</SelectItem>
+                                <SelectItem value="o3-mini">o3-mini (Advanced Reasoning)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

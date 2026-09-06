@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/server";
 import { hashApiKey } from "@/lib/api-keys";
+import { checkRateLimit, getRateLimitHeaders } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
-    const apiKey = searchParams.get("key");
+    let apiKey: string | null | undefined = searchParams.get("key");
+
+    if (!apiKey) {
+        const authHeader = request.headers.get("authorization");
+        if (authHeader?.startsWith("Bearer ")) {
+            apiKey = authHeader.substring(7).trim();
+        } else if (authHeader) {
+            apiKey = authHeader.trim();
+        } else if (request.headers.get("x-api-key")) {
+            apiKey = request.headers.get("x-api-key")?.trim();
+        }
+    }
 
     if (!apiKey) {
         return NextResponse.json(
@@ -26,8 +38,19 @@ export async function POST(request: NextRequest) {
 
     if (keyError || !keyRecord) {
         return NextResponse.json(
-            { error: "Invalid or inactive API key" },
+            { error: "Invalid API Key" },
             { status: 401 }
+        );
+    }
+
+    // Rate Limiting (120 requests per minute per webhook key)
+    const rateLimit = checkRateLimit(`ingest:${keyRecord.id || keyHash}`, { windowMs: 60000, maxRequests: 120 });
+    const rateLimitHeaders = getRateLimitHeaders(rateLimit);
+
+    if (!rateLimit.allowed) {
+        return NextResponse.json(
+            { error: "Too many requests. Rate limit exceeded." },
+            { status: 429, headers: rateLimitHeaders }
         );
     }
 
@@ -292,7 +315,16 @@ export async function POST(request: NextRequest) {
                                         from: senderEmail,
                                         to: contact.email,
                                         subject: subjectLine,
-                                        html: htmlContent
+                                        html: htmlContent,
+                                        headers: {
+                                            'X-Automation-Id': auto.id,
+                                            'X-Contact-Id': contact.id || '',
+                                        },
+                                        tags: [
+                                            { name: 'automation_id', value: auto.id },
+                                            { name: 'contact_id', value: contact.id || '' },
+                                            { name: 'user_id', value: keyRecord.user_id },
+                                        ].filter(t => Boolean(t.value))
                                     });
                                 }
                             }
@@ -465,7 +497,16 @@ export async function POST(request: NextRequest) {
                                             from: senderEmail,
                                             to: emailAddr,
                                             subject: subjectLine,
-                                            html: htmlContent
+                                            html: htmlContent,
+                                            headers: {
+                                                'X-Automation-Id': auto.id,
+                                                'X-Contact-Id': (contact as any)?.id || '',
+                                            },
+                                            tags: [
+                                                { name: 'automation_id', value: auto.id },
+                                                { name: 'contact_id', value: (contact as any)?.id || '' },
+                                                { name: 'user_id', value: keyRecord.user_id },
+                                            ].filter(t => Boolean(t.value))
                                         });
 
                                         console.log(`[Ingest] Instant email sent to ${emailAddr} from ${senderEmail}`, emailResult);
@@ -597,5 +638,5 @@ export async function POST(request: NextRequest) {
         success: true,
         contact: contact,
         triggered: triggeredWorkflows
-    });
+    }, { headers: rateLimitHeaders });
 }

@@ -68,27 +68,20 @@ export function TemplatesList({ templates }: { templates: Template[] }) {
         setIsCreating(true)
 
         try {
-            // @ts-ignore - Action type mismatch workaround
             const result = await createTemplate(newTemplateName)
 
-            // Check if result has error property (it might be undefined if redirected)
             if (result && result.error) {
                 toast({
                     title: "Error",
                     description: result.error,
                     variant: "destructive"
                 })
-            } else {
-                // If we get here, it either redirected (so this might not run) 
-                // or returned successfully.
+            } else if (result?.id) {
                 setIsCreateOpen(false)
                 setNewTemplateName("")
+                router.push(`/email-builder/${result.id}`)
             }
         } catch (error: any) {
-            // Next.js redirects throw errors, we must ignore them
-            if (error.digest?.startsWith('NEXT_REDIRECT')) {
-                throw error
-            }
             toast({
                 title: "Error",
                 description: "Failed to create template. Please try again.",

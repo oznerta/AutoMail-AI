@@ -44,8 +44,8 @@ export function processEmailContent(
         safeVariables[key] = variables[key] ?? undefined;
     });
 
-    // Replace standard pattern {{ key }}
-    let processed = content.replace(/{{([\w_.]+)}}/g, (match, key) => {
+    // Replace standard pattern {{ key }} or {{key}}
+    let processed = content.replace(/{{\s*([\w_.]+)\s*}}/g, (match, key) => {
         // Handle "contact.first_name" -> "first_name" mapping if needed
         const lookupKey = key.startsWith('contact.') ? key.replace('contact.', '') : key;
 
@@ -73,9 +73,9 @@ export function processEmailContent(
  * Extract distinct variables used in a template
  */
 export function extractVariables(content: string): string[] {
-    const matches = content.match(/{{([\w_]+)}}/g);
+    const matches = content.match(/{{\s*([\w_.]+)\s*}}/g);
     if (!matches) return [];
 
-    // Clean brackets and deduplicate
-    return Array.from(new Set(matches.map(m => m.replace('{{', '').replace('}}', ''))));
+    // Clean brackets, trim whitespace, and deduplicate
+    return Array.from(new Set(matches.map(m => m.replace(/[{}]/g, '').trim())));
 }

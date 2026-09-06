@@ -120,7 +120,7 @@ export async function POST(request: Request) {
 
         const { email, first_name, last_name, company, tags = [], custom_fields = {}, source } = validationResult.data;
 
-        // 1. Insert Contact (Ignore custom_fields JSONB if it exists, we use tables now)
+        // 1. Insert Contact (Ensure tags array is saved to contacts table)
         const { data: contact, error: contactError } = await (supabase
             .from('contacts') as any)
             .insert({
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
                 first_name,
                 last_name,
                 company,
-                // custom_fields: custom_fields, // DEPRECATED: Don't save to JSONB column
+                tags: tags,
                 source: source || 'manual',
                 status: 'active',
             })
@@ -144,80 +144,69 @@ export async function POST(request: Request) {
             );
         }
 
-        // 2. Handle Tags
+        // 2. Handle Tags (Batched)
         if (tags && tags.length > 0) {
-            for (const tagName of tags) {
-                let tagId: string | null = null;
-                // Find or Create Tag
-                const { data: existingTag } = await (supabase
+            const { data: existingTags } = await (supabase
+                .from('tags') as any)
+                .select('id, name')
+                .eq('user_id', user.id)
+                .in('name', tags);
+
+            const existingMap = new Map<string, string>((existingTags || []).map((t: any) => [t.name, t.id]));
+            const missingTags = tags.filter(name => !existingMap.has(name));
+
+            if (missingTags.length > 0) {
+                const { data: createdTags } = await (supabase
                     .from('tags') as any)
-                    .select('id')
-                    .eq('user_id', user.id)
-                    .eq('name', tagName)
-                    .single();
+                    .insert(missingTags.map(name => ({ user_id: user.id, name })))
+                    .select('id, name');
+                (createdTags || []).forEach((t: any) => existingMap.set(t.name, t.id));
+            }
 
-                if (existingTag) {
-                    tagId = existingTag.id;
-                } else {
-                    const { data: newTag } = await (supabase
-                        .from('tags') as any)
-                        .insert({ user_id: user.id, name: tagName })
-                        .select('id')
-                        .single();
-                    if (newTag) tagId = newTag.id;
-                }
+            const contactTagsToInsert = tags
+                .map(name => existingMap.get(name))
+                .filter(Boolean)
+                .map(tagId => ({ contact_id: contact.id, tag_id: tagId }));
 
-                if (tagId) {
-                    await (supabase
-                        .from('contact_tags') as any)
-                        .insert({ contact_id: contact.id, tag_id: tagId });
-                }
+            if (contactTagsToInsert.length > 0) {
+                await (supabase
+                    .from('contact_tags') as any)
+                    .insert(contactTagsToInsert);
             }
         }
 
-        // 3. Handle Custom Fields (Normalized)
+        // 3. Handle Custom Fields (Batched)
         const fieldKeys = Object.keys(custom_fields);
         if (fieldKeys.length > 0) {
-            for (const key of fieldKeys) {
-                const value = custom_fields[key];
-                if (!value) continue; // Skip empty strings?
+            const { data: existingDefs } = await (supabase
+                .from('custom_field_definitions') as any)
+                .select('id, name')
+                .eq('user_id', user.id)
+                .in('name', fieldKeys);
 
-                // Find Definition ID
-                // Note: We currently require definitions to exist. 
-                // Option: Auto-create definition if missing? 
-                // For "Strict" normalization, we usually fail or ignore unknown keys.
-                // But for good UX here, let's Auto-Create Definition if it doesn't exist (Dynamic Schema).
+            const defMap = new Map<string, string>((existingDefs || []).map((d: any) => [d.name, d.id]));
+            const missingKeys = fieldKeys.filter(k => !defMap.has(k));
 
-                let defId: string | null = null;
-
-                const { data: existingDef } = await (supabase
+            if (missingKeys.length > 0) {
+                const { data: newDefs } = await (supabase
                     .from('custom_field_definitions') as any)
-                    .select('id')
-                    .eq('user_id', user.id)
-                    .eq('name', key)
-                    .single();
+                    .insert(missingKeys.map(key => ({ user_id: user.id, name: key, type: 'text' })))
+                    .select('id, name');
+                (newDefs || []).forEach((d: any) => defMap.set(d.name, d.id));
+            }
 
-                if (existingDef) {
-                    defId = existingDef.id;
-                } else {
-                    // Auto-create definition regarding user intent to "just add fields"
-                    const { data: newDef } = await (supabase
-                        .from('custom_field_definitions') as any)
-                        .insert({ user_id: user.id, name: key, type: 'text' })
-                        .select('id')
-                        .single();
-                    if (newDef) defId = newDef.id;
-                }
+            const fieldValuesToInsert = fieldKeys
+                .filter(key => Boolean(custom_fields[key]) && defMap.has(key))
+                .map(key => ({
+                    contact_id: contact.id,
+                    field_id: defMap.get(key),
+                    value: custom_fields[key]
+                }));
 
-                if (defId) {
-                    await (supabase
-                        .from('contact_field_values') as any)
-                        .insert({
-                            contact_id: contact.id,
-                            field_id: defId,
-                            value: value
-                        });
-                }
+            if (fieldValuesToInsert.length > 0) {
+                await (supabase
+                    .from('contact_field_values') as any)
+                    .insert(fieldValuesToInsert);
             }
         }
 

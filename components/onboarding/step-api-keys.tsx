@@ -44,11 +44,17 @@ export function StepApiKeys({ onNext, onSkip }: StepApiKeysProps) {
                 }));
             }
 
-            await Promise.all(promises);
+            const responses = await Promise.all(promises);
+            for (const res of responses) {
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.error || 'Failed to save API key. Please check your credentials.');
+                }
+            }
             toast({ title: "Keys Saved", description: "Your API keys have been securely stored." });
             onNext();
-        } catch (error) {
-            toast({ title: "Error", description: "Failed to save keys. Please try again.", variant: "destructive" });
+        } catch (error: any) {
+            toast({ title: "Error", description: error?.message || "Failed to save keys. Please try again.", variant: "destructive" });
         } finally {
             setIsSaving(false);
         }

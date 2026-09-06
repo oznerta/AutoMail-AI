@@ -45,10 +45,16 @@ export async function PATCH(
 
         const { tags, custom_fields, ...contactUpdates } = validationResult.data;
 
+        // If tags was provided, also update contacts.tags array column
+        const finalUpdates: any = { ...contactUpdates };
+        if (tags !== undefined) {
+            finalUpdates.tags = tags;
+        }
+
         // 1. Update Contact Scalars
         const { data: contact, error } = await (supabase
             .from('contacts') as any)
-            .update(contactUpdates)
+            .update(finalUpdates)
             .eq('id', contactId)
             .eq('user_id', user.id)
             .select()
@@ -62,7 +68,7 @@ export async function PATCH(
             );
         }
 
-        // 2. Sync Tags
+        // 2. Sync Tags (Batched)
         if (tags !== undefined) {
             // Get existing tags to determine what's NEW
             const { data: existingTagLinks } = await (supabase
@@ -70,38 +76,40 @@ export async function PATCH(
                 .select('tag_id, tags!inner(name)')
                 .eq('contact_id', contactId);
 
-            const existingTagNames = new Set((existingTagLinks || []).map((link: any) => link.tags.name));
-            const newTagsSet = new Set(tags);
+            const existingTagNames = new Set((existingTagLinks || []).map((link: any) => link.tags?.name));
             const addedTags = tags.filter(tag => !existingTagNames.has(tag));
 
             await (supabase.from('contact_tags') as any)
                 .delete()
                 .eq('contact_id', contactId);
 
-            for (const tagName of tags) {
-                let tagId: string | null = null;
-                const { data: existingTag } = await (supabase
+            if (tags.length > 0) {
+                const { data: existingTags } = await (supabase
                     .from('tags') as any)
-                    .select('id')
+                    .select('id, name')
                     .eq('user_id', user.id)
-                    .eq('name', tagName)
-                    .single();
+                    .in('name', tags);
 
-                if (existingTag) {
-                    tagId = existingTag.id;
-                } else {
-                    const { data: newTag } = await (supabase
+                const existingMap = new Map<string, string>((existingTags || []).map((t: any) => [t.name, t.id]));
+                const missingTags = tags.filter(name => !existingMap.has(name));
+
+                if (missingTags.length > 0) {
+                    const { data: createdTags } = await (supabase
                         .from('tags') as any)
-                        .insert({ user_id: user.id, name: tagName })
-                        .select('id')
-                        .single();
-                    if (newTag) tagId = newTag.id;
+                        .insert(missingTags.map(name => ({ user_id: user.id, name })))
+                        .select('id, name');
+                    (createdTags || []).forEach((t: any) => existingMap.set(t.name, t.id));
                 }
 
-                if (tagId) {
+                const contactTagsToInsert = tags
+                    .map(name => existingMap.get(name))
+                    .filter(Boolean)
+                    .map(tagId => ({ contact_id: contactId, tag_id: tagId }));
+
+                if (contactTagsToInsert.length > 0) {
                     await (supabase
                         .from('contact_tags') as any)
-                        .insert({ contact_id: contactId, tag_id: tagId });
+                        .insert(contactTagsToInsert);
                 }
             }
 
@@ -145,45 +153,39 @@ export async function PATCH(
             }
         }
 
-        // 3. Sync Custom Fields
+        // 3. Sync Custom Fields (Batched)
         if (custom_fields !== undefined) {
-            // Strategy: Upsert provided values.
-            // If we wanted to "replace all", we would delete first. 
-            // Here, we just update/add the keys provided.
-
-            for (const [key, value] of Object.entries(custom_fields)) {
-                // Find/Create Definition
-                let defId: string | null = null;
-                const { data: existingDef } = await (supabase
+            const fieldKeys = Object.keys(custom_fields);
+            if (fieldKeys.length > 0) {
+                const { data: existingDefs } = await (supabase
                     .from('custom_field_definitions') as any)
-                    .select('id')
+                    .select('id, name')
                     .eq('user_id', user.id)
-                    .eq('name', key)
-                    .single();
+                    .in('name', fieldKeys);
 
-                if (existingDef) {
-                    defId = existingDef.id;
-                } else {
-                    const { data: newDef } = await (supabase
+                const defMap = new Map<string, string>((existingDefs || []).map((d: any) => [d.name, d.id]));
+                const missingKeys = fieldKeys.filter(k => !defMap.has(k));
+
+                if (missingKeys.length > 0) {
+                    const { data: newDefs } = await (supabase
                         .from('custom_field_definitions') as any)
-                        .insert({ user_id: user.id, name: key, type: 'text' })
-                        .select('id')
-                        .single();
-                    if (newDef) defId = newDef.id;
+                        .insert(missingKeys.map(key => ({ user_id: user.id, name: key, type: 'text' })))
+                        .select('id, name');
+                    (newDefs || []).forEach((d: any) => defMap.set(d.name, d.id));
                 }
 
-                if (defId) {
-                    // Delete old value if exists to simulate clean upsert or just use upsert syntax
-                    // Supabase upsert requires primary key constraint match
-                    // PK is (contact_id, field_id)
+                const fieldValuesToUpsert = fieldKeys
+                    .filter(key => defMap.has(key))
+                    .map(key => ({
+                        contact_id: contactId,
+                        field_id: defMap.get(key)!,
+                        value: custom_fields[key]
+                    }));
 
+                if (fieldValuesToUpsert.length > 0) {
                     await (supabase
                         .from('contact_field_values') as any)
-                        .upsert({
-                            contact_id: contactId,
-                            field_id: defId,
-                            value: value
-                        }, { onConflict: 'contact_id, field_id' });
+                        .upsert(fieldValuesToUpsert, { onConflict: 'contact_id, field_id' });
                 }
             }
         }

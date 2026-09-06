@@ -35,3 +35,12 @@ Thumbs.db
 # Misc
 *.log
 .vercel
+
+# OmniGate AI Secret Protection
+.env
+.env.*
+*.pem
+*.key
+secrets.*
+credentials.json
+.mcp.json

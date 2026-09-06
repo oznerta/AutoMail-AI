@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * AES-256-GCM Encryption Utilities
  * 
@@ -34,11 +33,10 @@ async function deriveKey(secret: string, salt: Uint8Array): Promise<CryptoKey> {
         ['deriveBits', 'deriveKey']
     );
 
-    // @ts-ignore - TypeScript overload mismatch with crypto types in this environment
     return crypto.subtle.deriveKey(
         {
             name: 'PBKDF2',
-            salt,
+            salt: salt as unknown as BufferSource,
             iterations: 100000,
             hash: 'SHA-256',
         },
