@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button"
 import { ArrowRight, Terminal, Zap, Mail, Database, Bot } from "lucide-react"
 import Link from "next/link"
 import { SpotlightCard } from "@/components/ui/spotlight-card";
+import { useOrigin } from "@/hooks/use-origin";
 
 export default function DocsPage() {
+    const origin = useOrigin();
     return (
         <div className="space-y-12 w-full max-w-[1200px]">
             {/* Hero Section */}

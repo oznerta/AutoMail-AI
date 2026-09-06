@@ -1,4 +1,7 @@
+import { getServerURL } from "@/utils/supabase/client";
+
 export default function ApiWebhooksPage() {
+    const origin = getServerURL();
     return (
         <div className="space-y-10 max-w-4xl">
             <div className="space-y-2">

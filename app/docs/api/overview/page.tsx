@@ -1,4 +1,7 @@
+import { getServerURL } from "@/utils/supabase/client";
+
 export default function ApiOverviewPage() {
+    const origin = getServerURL();
     return (
         <div className="space-y-6">
             <div className="space-y-2">
