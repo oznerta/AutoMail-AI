@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Save, ArrowLeft, Play, Pause, Trash2, Plus, Zap, AlertCircle, Copy, Check, Tag } from "lucide-react"
+import { Loader2, Save, ArrowLeft, Play, Pause, Trash2, Plus, Zap, AlertCircle, Copy, Check, Tag, GitBranch, BarChart3 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
     Select,
@@ -23,6 +23,8 @@ import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { getURL } from "@/utils/supabase/client"
+import { CampaignAnalytics } from "@/components/analytics/campaign-analytics"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 // Types for our local state
 type TriggerConfig = {
@@ -32,12 +34,13 @@ type TriggerConfig = {
 
 type Step = {
     id: string;
-    type: 'send_email' | 'delay' | 'add_tag';
+    type: 'send_email' | 'delay' | 'add_tag' | 'condition';
     config: any;
 }
 
 export default function AutomationEditorPage({ params }: { params: { id: string } }) {
     const { id } = params
+    const [activeTab, setActiveTab] = useState<'workflow' | 'analytics'>('workflow')
     const [automation, setAutomation] = useState<Automation | null>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
@@ -113,13 +116,20 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
         }
     }
 
-    const addStep = (type: 'send_email' | 'delay' | 'add_tag') => {
+    const addStep = (type: 'send_email' | 'delay' | 'add_tag' | 'condition') => {
         const newStep: Step = {
             id: crypto.randomUUID(),
             type,
             config: type === 'delay' ? { value: 1, unit: 'days' } :
                 type === 'add_tag' ? { tag: '' } :
-                    { templateId: '' }
+                type === 'condition' ? {
+                    field: 'tag',
+                    operator: 'has_tag',
+                    value: '',
+                    then_action: { type: 'send_email', template_id: '' },
+                    else_action: { type: 'add_tag', tag: '' }
+                } :
+                { templateId: '', senderId: '' }
         }
         setSteps([...steps, newStep])
     }
@@ -203,9 +213,47 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
                         </Button>
                     </div>
                 </div>
+
+                {/* Subnav Tabs */}
+                <div className="flex items-center gap-4 mt-4 border-b border-border/40">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('workflow')}
+                        className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors ${
+                            activeTab === 'workflow'
+                                ? 'border-primary text-foreground'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                        Workflow Canvas
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('analytics')}
+                        className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+                            activeTab === 'analytics'
+                                ? 'border-primary text-foreground'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                        <BarChart3 className="h-3.5 w-3.5" /> Analytics & Activity
+                    </button>
+                </div>
             </div>
 
-            {/* Canvas / Timeline */}
+            {/* Analytics Tab Content */}
+            {activeTab === 'analytics' && (
+                <div className="px-2 sm:px-4 animate-in fade-in duration-200">
+                    <CampaignAnalytics
+                        automationId={automation.id}
+                        title={`${automation.name} Performance`}
+                        description="Real-time execution metrics, delivery rates, and recipient execution logs."
+                    />
+                </div>
+            )}
+
+            {/* Workflow Tab Content */}
+            {activeTab === 'workflow' && (
             <div className="space-y-8 relative px-2 sm:px-4">
                 {/* Visual Connector Line */}
                 <div className="absolute left-6 sm:left-10 top-8 bottom-0 w-0.5 bg-border -z-10" />
@@ -430,6 +478,219 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
                                             </Select>
                                         </div>
                                     )}
+
+                                    {step.type === 'condition' && (
+                                        <div className="w-full space-y-4 pt-1">
+                                            {/* IF Rule */}
+                                            <div className="bg-muted/40 p-3 rounded-lg border border-border/50 space-y-3">
+                                                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-500 uppercase tracking-wider">
+                                                    <GitBranch className="h-3.5 w-3.5" /> If Contact Matches:
+                                                </div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                    <div>
+                                                        <Label className="text-[11px] text-muted-foreground">Attribute</Label>
+                                                        <Select
+                                                            value={step.config.field || 'tag'}
+                                                            onValueChange={(val) => updateStepConfig(step.id, { field: val })}
+                                                        >
+                                                            <SelectTrigger className="h-8 text-xs">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="tag">Contact Tag</SelectItem>
+                                                                <SelectItem value="status">Contact Status</SelectItem>
+                                                                <SelectItem value="company">Company</SelectItem>
+                                                                <SelectItem value="email">Email</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div>
+                                                        <Label className="text-[11px] text-muted-foreground">Operator</Label>
+                                                        <Select
+                                                            value={step.config.operator || (step.config.field === 'tag' ? 'has_tag' : 'equals')}
+                                                            onValueChange={(val) => updateStepConfig(step.id, { operator: val })}
+                                                        >
+                                                            <SelectTrigger className="h-8 text-xs">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {step.config.field === 'tag' ? (
+                                                                    <SelectItem value="has_tag">Has Tag</SelectItem>
+                                                                ) : (
+                                                                    <>
+                                                                        <SelectItem value="equals">Equals</SelectItem>
+                                                                        <SelectItem value="not_equals">Does Not Equal</SelectItem>
+                                                                        <SelectItem value="contains">Contains</SelectItem>
+                                                                    </>
+                                                                )}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div>
+                                                        <Label className="text-[11px] text-muted-foreground">Target Value</Label>
+                                                        {step.config.field === 'tag' ? (
+                                                            <Select
+                                                                value={step.config.value || ''}
+                                                                onValueChange={(val) => updateStepConfig(step.id, { value: val })}
+                                                            >
+                                                                <SelectTrigger className="h-8 text-xs">
+                                                                    <SelectValue placeholder="Select Tag" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {availableTags.map(tag => (
+                                                                        <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        ) : step.config.field === 'status' ? (
+                                                            <Select
+                                                                value={step.config.value || 'active'}
+                                                                onValueChange={(val) => updateStepConfig(step.id, { value: val })}
+                                                            >
+                                                                <SelectTrigger className="h-8 text-xs">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="active">Active</SelectItem>
+                                                                    <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
+                                                                    <SelectItem value="bounced">Bounced</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        ) : (
+                                                            <Input
+                                                                className="h-8 text-xs"
+                                                                placeholder="Value to match..."
+                                                                value={step.config.value || ''}
+                                                                onChange={(e) => updateStepConfig(step.id, { value: e.target.value })}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Branches Grid */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                {/* THEN Branch */}
+                                                <div className="p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/20 space-y-2">
+                                                    <div className="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                                        <Check className="h-3.5 w-3.5" /> THEN (If True)
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Select
+                                                            value={step.config.then_action?.type || 'send_email'}
+                                                            onValueChange={(val) => updateStepConfig(step.id, {
+                                                                then_action: { ...step.config.then_action, type: val }
+                                                            })}
+                                                        >
+                                                            <SelectTrigger className="h-7 text-xs">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="send_email">Send Email</SelectItem>
+                                                                <SelectItem value="add_tag">Add Tag</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+
+                                                        {step.config.then_action?.type === 'send_email' && (
+                                                            <Select
+                                                                value={step.config.then_action?.template_id || ''}
+                                                                onValueChange={(val) => updateStepConfig(step.id, {
+                                                                    then_action: { ...step.config.then_action, template_id: val }
+                                                                })}
+                                                            >
+                                                                <SelectTrigger className="h-7 text-xs">
+                                                                    <SelectValue placeholder="Choose Template..." />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {templates.map(t => (
+                                                                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        )}
+
+                                                        {step.config.then_action?.type === 'add_tag' && (
+                                                            <Select
+                                                                value={step.config.then_action?.tag || ''}
+                                                                onValueChange={(val) => updateStepConfig(step.id, {
+                                                                    then_action: { ...step.config.then_action, tag: val }
+                                                                })}
+                                                            >
+                                                                <SelectTrigger className="h-7 text-xs">
+                                                                    <SelectValue placeholder="Select Tag..." />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {availableTags.map(tag => (
+                                                                        <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* ELSE Branch */}
+                                                <div className="p-3 bg-muted/40 rounded-lg border border-border/50 space-y-2">
+                                                    <div className="flex items-center gap-1 text-xs font-bold text-muted-foreground">
+                                                        <AlertCircle className="h-3.5 w-3.5" /> OTHERWISE (If False)
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Select
+                                                            value={step.config.else_action?.type || 'add_tag'}
+                                                            onValueChange={(val) => updateStepConfig(step.id, {
+                                                                else_action: { ...step.config.else_action, type: val }
+                                                            })}
+                                                        >
+                                                            <SelectTrigger className="h-7 text-xs">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="add_tag">Add Tag</SelectItem>
+                                                                <SelectItem value="send_email">Send Email</SelectItem>
+                                                                <SelectItem value="none">Skip (Do Nothing)</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+
+                                                        {step.config.else_action?.type === 'send_email' && (
+                                                            <Select
+                                                                value={step.config.else_action?.template_id || ''}
+                                                                onValueChange={(val) => updateStepConfig(step.id, {
+                                                                    else_action: { ...step.config.else_action, template_id: val }
+                                                                })}
+                                                            >
+                                                                <SelectTrigger className="h-7 text-xs">
+                                                                    <SelectValue placeholder="Choose Template..." />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {templates.map(t => (
+                                                                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        )}
+
+                                                        {step.config.else_action?.type === 'add_tag' && (
+                                                            <Select
+                                                                value={step.config.else_action?.tag || ''}
+                                                                onValueChange={(val) => updateStepConfig(step.id, {
+                                                                    else_action: { ...step.config.else_action, tag: val }
+                                                                })}
+                                                            >
+                                                                <SelectTrigger className="h-7 text-xs">
+                                                                    <SelectValue placeholder="Select Tag..." />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {availableTags.map(tag => (
+                                                                        <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
@@ -448,6 +709,9 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
                         <Button variant="outline" size="sm" onClick={() => addStep('add_tag')}>
                             <Tag className="h-3.5 w-3.5 mr-1" /> Add Tag
                         </Button>
+                        <Button variant="outline" size="sm" onClick={() => addStep('condition')}>
+                            <GitBranch className="h-3.5 w-3.5 mr-1" /> If / Else
+                        </Button>
                     </div>
                 </div>
 
@@ -459,6 +723,7 @@ export default function AutomationEditorPage({ params }: { params: { id: string 
                 </div>
 
             </div>
+            )}
         </div>
     )
 }

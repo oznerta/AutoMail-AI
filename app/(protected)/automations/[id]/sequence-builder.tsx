@@ -10,7 +10,10 @@ import {
     MoreVertical,
     GripVertical,
     ArrowDown,
-    Tag
+    Tag,
+    GitBranch,
+    Check,
+    AlertCircle
 } from "lucide-react"
 import {
     Select,
@@ -39,13 +42,20 @@ export function SequenceBuilder({
     templates: any[]
 }) {
 
-    const addStep = (type: 'email' | 'delay' | 'add_tag') => {
+    const addStep = (type: 'email' | 'delay' | 'add_tag' | 'condition') => {
         const newStep = {
             id: crypto.randomUUID(),
             type,
             config: type === 'delay' ? { value: 24, unit: 'hours' } :
                 type === 'add_tag' ? { tag: '' } :
-                    { template_id: '' }
+                type === 'condition' ? {
+                    field: 'tag',
+                    operator: 'has_tag',
+                    value: '',
+                    then_action: { type: 'send_email', template_id: '' },
+                    else_action: { type: 'add_tag', tag: '' }
+                } :
+                { template_id: '' }
         }
         onChange([...steps, newStep])
     }
@@ -97,16 +107,19 @@ export function SequenceBuilder({
                                         <div className="flex items-center gap-2">
                                             <div className={`p-2 rounded-md ${step.type === 'email' ? 'bg-blue-100 text-blue-600' :
                                                 step.type === 'add_tag' ? 'bg-green-100 text-green-600' :
-                                                    'bg-amber-100 text-amber-600'
+                                                step.type === 'condition' ? 'bg-amber-100 text-amber-600' :
+                                                    'bg-purple-100 text-purple-600'
                                                 }`}>
                                                 {step.type === 'email' ? <Mail className="h-4 w-4" /> :
                                                     step.type === 'add_tag' ? <Tag className="h-4 w-4" /> :
+                                                    step.type === 'condition' ? <GitBranch className="h-4 w-4" /> :
                                                         <Clock className="h-4 w-4" />}
                                             </div>
                                             <div>
                                                 <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">
                                                     {step.type === 'email' ? 'Send Email' :
                                                         step.type === 'add_tag' ? 'Add Tag' :
+                                                        step.type === 'condition' ? 'If / Else Condition' :
                                                             'Wait Delay'}
                                                 </h4>
                                                 {/* <p className="text-xs text-muted-foreground">Step {index + 1}</p> */}
@@ -196,6 +209,94 @@ export function SequenceBuilder({
                                             </div>
                                         </div>
                                     )}
+
+                                    {step.type === 'condition' && (
+                                        <div className="space-y-3 pt-2">
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-muted/30 p-2.5 rounded-lg border">
+                                                <div className="space-y-1">
+                                                    <Label className="text-[11px]">Attribute</Label>
+                                                    <Select
+                                                        value={step.config?.field || 'tag'}
+                                                        onValueChange={(val) => updateStep(index, 'field', val)}
+                                                    >
+                                                        <SelectTrigger className="h-7 text-xs">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="tag">Contact Tag</SelectItem>
+                                                            <SelectItem value="status">Status</SelectItem>
+                                                            <SelectItem value="company">Company</SelectItem>
+                                                            <SelectItem value="email">Email</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[11px]">Operator</Label>
+                                                    <Select
+                                                        value={step.config?.operator || (step.config?.field === 'tag' ? 'has_tag' : 'equals')}
+                                                        onValueChange={(val) => updateStep(index, 'operator', val)}
+                                                    >
+                                                        <SelectTrigger className="h-7 text-xs">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {step.config?.field === 'tag' ? (
+                                                                <SelectItem value="has_tag">Has Tag</SelectItem>
+                                                            ) : (
+                                                                <>
+                                                                    <SelectItem value="equals">Equals</SelectItem>
+                                                                    <SelectItem value="not_equals">Does Not Equal</SelectItem>
+                                                                    <SelectItem value="contains">Contains</SelectItem>
+                                                                </>
+                                                            )}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[11px]">Target Value</Label>
+                                                    <Input
+                                                        className="h-7 text-xs"
+                                                        placeholder="e.g. VIP or active"
+                                                        value={step.config?.value || ''}
+                                                        onChange={(e) => updateStep(index, 'value', e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                <div className="p-2.5 bg-emerald-500/5 rounded-lg border border-emerald-500/20 space-y-1.5">
+                                                    <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                                                        <Check className="h-3 w-3" /> THEN (If True)
+                                                    </div>
+                                                    <Select
+                                                        value={step.config?.then_action?.template_id || ''}
+                                                        onValueChange={(val) => updateStep(index, 'then_action', { type: 'send_email', template_id: val })}
+                                                    >
+                                                        <SelectTrigger className="h-7 text-xs">
+                                                            <SelectValue placeholder="Send Template..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {templates.map(t => (
+                                                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+
+                                                <div className="p-2.5 bg-muted/40 rounded-lg border space-y-1.5">
+                                                    <div className="flex items-center gap-1 text-[11px] font-bold text-muted-foreground">
+                                                        <AlertCircle className="h-3 w-3" /> OTHERWISE (If False)
+                                                    </div>
+                                                    <Input
+                                                        className="h-7 text-xs"
+                                                        placeholder="Add fallback tag..."
+                                                        value={step.config?.else_action?.tag || ''}
+                                                        onChange={(e) => updateStep(index, 'else_action', { type: 'add_tag', tag: e.target.value })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </div>
@@ -225,6 +326,9 @@ export function SequenceBuilder({
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => addStep('add_tag')}>
                                 <Tag className="mr-2 h-4 w-4" /> Add Tag
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => addStep('condition')}>
+                                <GitBranch className="mr-2 h-4 w-4" /> If / Else Condition
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>

@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { Calendar as CalendarIcon, Save, ArrowLeft, Send, CheckCircle, Loader2, Users, Tag, Check, X, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
+import { CampaignAnalytics } from "@/components/analytics/campaign-analytics";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -218,6 +219,9 @@ export function CampaignBuilder({ campaign }: { campaign: Campaign }) {
                     </TabsTrigger>
                     <TabsTrigger value="schedule" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-3">
                         Schedule
+                    </TabsTrigger>
+                    <TabsTrigger value="analytics" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-3">
+                        Analytics
                     </TabsTrigger>
                 </TabsList>
 
@@ -453,6 +457,15 @@ export function CampaignBuilder({ campaign }: { campaign: Campaign }) {
                             </div>
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* Analytics Tab */}
+                <TabsContent value="analytics" className="mt-6 flex-1 overflow-y-auto">
+                    <CampaignAnalytics
+                        automationId={campaign.id}
+                        title={`${name} Performance`}
+                        description="Real-time delivery rates, engagement metrics, and recipient execution statuses."
+                    />
                 </TabsContent>
             </Tabs>
 

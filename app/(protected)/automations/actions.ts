@@ -200,3 +200,9 @@ export async function generateWebhookToken(id: string) {
     revalidatePath(`/automations/${id}`);
     return { success: true, token: webhookToken };
 }
+
+export async function getAutomationAnalytics(id: string) {
+    const { getCampaignAnalytics } = await import('../campaigns/actions');
+    return getCampaignAnalytics(id);
+}
+

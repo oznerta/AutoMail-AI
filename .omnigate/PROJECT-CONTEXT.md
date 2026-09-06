@@ -119,6 +119,23 @@ Never store secrets here. Use placeholders such as `<HOSTING_RESOURCE>`, `<DATAB
   - Validation: `npm run build`
   - Replaced sequential loop queries in `app/api/contacts/route.ts` and `app/api/contacts/[id]/route.ts` with batched queries, batch definition creation, and batch upserts. Kept `contacts.tags` array column synchronized.
 
+#### Sprint 5: Visual Analytics & Conditional Branching (COMPLETED)
+- [x] **Interactive Performance & Engagement Analytics Component**
+  - Validation: `npm test && npm run build`
+  - Built `components/analytics/campaign-analytics.tsx` utilizing Recharts `ResponsiveContainer`, `BarChart`, `Bar`, `Cell`, and custom tooltips. Displays 4 key metric cards: Delivered, Unique Opens, Link Clicks, and Bounced with real-time percentage badges.
+  - Implemented interactive recipient activity feed and execution log table with search and status filtering (Delivered, Pending, Failed).
+- [x] **Campaign Studio Visual Analytics Integration**
+  - Validation: `npm run build`
+  - Added `Analytics` tab to `TabsList` and `TabsContent` in `app/(protected)/campaigns/campaign-builder.tsx`, allowing users to review real-time send volume, open rate, click rate, and subscriber delivery logs directly on `/campaigns/[id]`.
+- [x] **Automation Studio Analytics Integration**
+  - Validation: `npm run build`
+  - Added top-level `Workflow Canvas` vs `Analytics & Activity` tabs in `app/(protected)/automations/[id]/page.tsx` displaying live performance funnel and subscriber logs for automation sequences.
+- [x] **Conditional "If/Else" Automation Step Engine & Builder**
+  - Validation: `npm test && npm run build`
+  - Added `condition` step type supporting attribute filtering (Contact Tag, Status, Company, Email) with operators (`has_tag`, `equals`, `not_equals`, `contains`).
+  - Added visual decision tree node in `app/(protected)/automations/[id]/page.tsx` and `sequence-builder.tsx` with dual branches: "THEN (If True)" and "OTHERWISE (If False)".
+  - Built conditional execution logic in `app/api/cron/route.ts` evaluating contact attributes against rules and dispatching matching branch actions (conditional email send, tag addition). Added unit test suite `__tests__/lib/condition-step.test.ts`.
+
 ---
 
 ## 4. Scope & Non-Goals

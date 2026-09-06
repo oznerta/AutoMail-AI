@@ -361,6 +361,145 @@ export async function GET(request: Request) {
                             }
                             nextStepIndex++;
                             // shouldContinue remains true, move to next step instantly
+                        }
+                        else if (currentStep.type === 'condition') {
+                            const conditionConfig = currentStep.config || {};
+                            const field = conditionConfig.field || 'tag';
+                            const operator = conditionConfig.operator || 'has_tag';
+                            const targetValue = String(conditionConfig.value || '').trim();
+
+                            let matches = false;
+
+                            if (field === 'tag' || operator === 'has_tag') {
+                                const contactTags: string[] = Array.isArray((contact as any)?.tags) ? (contact as any).tags : [];
+                                matches = contactTags.some((t: string) => t.toLowerCase() === targetValue.toLowerCase());
+
+                                if (!matches && (contact as any)?.id) {
+                                    const { data: tagLink } = await supabaseAdmin
+                                        .from('contact_tags')
+                                        .select('tag_id, tags!inner(name)')
+                                        .eq('contact_id', (contact as any).id)
+                                        .eq('tags.name', targetValue)
+                                        .maybeSingle();
+                                    if (tagLink) matches = true;
+                                }
+                            } else if (field === 'status') {
+                                const contactStatus = String((contact as any)?.status || '');
+                                matches = operator === 'not_equals' ? contactStatus !== targetValue : contactStatus === targetValue;
+                            } else if (field === 'company') {
+                                const company = String((contact as any)?.company || '').toLowerCase();
+                                const val = targetValue.toLowerCase();
+                                matches = operator === 'contains' ? company.includes(val) : company === val;
+                            } else if (field === 'email') {
+                                const email = String((contact as any)?.email || '').toLowerCase();
+                                const val = targetValue.toLowerCase();
+                                matches = operator === 'contains' ? email.includes(val) : email === val;
+                            }
+
+                            const branch = matches ? conditionConfig.then_action : conditionConfig.else_action;
+
+                            if (branch && branch.type) {
+                                if (branch.type === 'send_email' && branch.template_id) {
+                                    const templateId = branch.template_id;
+                                    const { data: branchTemplate } = await supabaseAdmin
+                                        .from('email_templates')
+                                        .select('subject, content')
+                                        .eq('id', templateId)
+                                        .maybeSingle();
+
+                                    if (branchTemplate && (contact as any)?.email) {
+                                        const automationObj = Array.isArray(automation) ? automation[0] : automation;
+                                        const userId = automationObj?.user_id;
+
+                                        const { data: keyData } = await supabaseAdmin
+                                            .from('vault_keys')
+                                            .select('encrypted_value')
+                                            .eq('user_id', userId)
+                                            .eq('provider', 'resend')
+                                            .maybeSingle();
+
+                                        if (keyData) {
+                                            const { decrypt } = await import('@/lib/crypto');
+                                            const apiKey = await decrypt(keyData.encrypted_value);
+                                            const branchResend = new Resend(apiKey);
+                                            const { processEmailContent } = await import('@/utils/email-processor');
+
+                                            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+                                            const contactId = (contact as any)?.id || '';
+                                            const unsubUrl = `${appUrl}/unsubscribe?id=${contactId}&email=${encodeURIComponent((contact as any)?.email || '')}`;
+
+                                            const branchVars: Record<string, string> = {
+                                                email: (contact as any).email || '',
+                                                first_name: (contact as any).first_name || '',
+                                                last_name: (contact as any).last_name || '',
+                                                company: (contact as any).company || '',
+                                                unsubscribe_url: unsubUrl,
+                                            };
+
+                                            const branchHtml = processEmailContent(branchTemplate.content || "<p>No content</p>", branchVars);
+                                            const branchSub = processEmailContent(branchTemplate.subject || "Update", branchVars);
+
+                                            let senderEmail = 'onboarding@resend.dev';
+                                            if (branch.sender_id) {
+                                                const { data: senderData } = await supabaseAdmin
+                                                    .from('sender_identities')
+                                                    .select('email, name')
+                                                    .eq('id', branch.sender_id)
+                                                    .eq('user_id', userId)
+                                                    .maybeSingle();
+                                                if (senderData) senderEmail = `${senderData.name} <${senderData.email}>`;
+                                            }
+
+                                            await branchResend.emails.send({
+                                                from: senderEmail,
+                                                to: (contact as any).email,
+                                                subject: branchSub,
+                                                html: branchHtml,
+                                                headers: {
+                                                    'X-Automation-Id': automation.id,
+                                                    'X-Contact-Id': contactId,
+                                                    'List-Unsubscribe': `<${unsubUrl}>`,
+                                                    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                                                },
+                                                tags: [
+                                                    { name: 'automation_id', value: automation.id },
+                                                    { name: 'contact_id', value: contactId },
+                                                    { name: 'user_id', value: automation.user_id },
+                                                ].filter(t => Boolean(t.value))
+                                            });
+                                            console.log(`[Cron Condition] Sent conditional email (${templateId}) to ${(contact as any).email}`);
+                                        }
+                                    }
+                                } else if (branch.type === 'add_tag' && branch.tag) {
+                                    const tagName = branch.tag;
+                                    let tagId;
+                                    const { data: existingTag } = await supabaseAdmin
+                                        .from('tags')
+                                        .select('id')
+                                        .eq('user_id', automation.user_id)
+                                        .eq('name', tagName)
+                                        .maybeSingle();
+
+                                    if (existingTag) {
+                                        tagId = existingTag.id;
+                                    } else {
+                                        const { data: newTag } = await supabaseAdmin
+                                            .from('tags')
+                                            .insert({ user_id: automation.user_id, name: tagName })
+                                            .select('id')
+                                            .maybeSingle();
+                                        if (newTag) tagId = newTag.id;
+                                    }
+
+                                    if (tagId && (contact as any)?.id) {
+                                        await supabaseAdmin
+                                            .from('contact_tags')
+                                            .upsert({ contact_id: (contact as any).id, tag_id: tagId }, { onConflict: 'contact_id, tag_id' });
+                                        console.log(`[Cron Condition] Added branch tag '${tagName}' to ${(contact as any).email}`);
+                                    }
+                                }
+                            }
+                            nextStepIndex++;
                         } else {
                             // Safety catch for unknown steps
                             console.warn(`[Cron] Unknown step type: ${currentStep.type}`);
