@@ -8,7 +8,7 @@ export type DashboardStats = {
     emailsSent: number;
     totalCampaigns: number;
     recentContacts: any[];
-    subscriberGrowth: { name: string; total: number }[];
+    subscriberGrowth: { name: string; total: number; new: number }[];
 };
 
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -37,21 +37,26 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const sumSent = automationsData?.reduce((acc: number, a: any) => acc + (a.total_sent || 0), 0) || 0;
     const emailsSent = Math.max(sumSent, queueCompleted || 0);
 
-    // Calculate realistic cumulative subscriber growth over the past 6 months
+    // Calculate realistic subscriber growth (cumulative total and monthly new signups) over trailing 12 months
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const growthArray: { name: string; total: number }[] = [];
+    const growthArray: { name: string; total: number; new: number }[] = [];
 
     const now = new Date();
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 11; i >= 0; i--) {
         const monthDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+        const monthStartDate = new Date(now.getFullYear(), now.getMonth() - i, 1, 0, 0, 0);
         const monthName = months[monthDate.getMonth()];
 
-        // Total subscribers who joined on or before the end of this month
-        const countAtMonth = (allContacts as { created_at: string }[] | null)?.filter(
+        const totalAtMonth = (allContacts as { created_at: string }[] | null)?.filter(
             c => new Date(c.created_at) <= monthDate
         ).length || 0;
 
-        growthArray.push({ name: monthName, total: countAtMonth });
+        const newAtMonth = (allContacts as { created_at: string }[] | null)?.filter(c => {
+            const d = new Date(c.created_at);
+            return d >= monthStartDate && d <= monthDate;
+        }).length || 0;
+
+        growthArray.push({ name: monthName, total: totalAtMonth, new: newAtMonth });
     }
 
     return {
