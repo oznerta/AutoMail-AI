@@ -1,10 +1,4 @@
-"use client";
-
-import { useOrigin } from "@/hooks/use-origin";
-
 export default function ApiWebhooksPage() {
-    const origin = useOrigin();
-
     return (
         <div className="space-y-10 max-w-4xl">
             <div className="space-y-2">

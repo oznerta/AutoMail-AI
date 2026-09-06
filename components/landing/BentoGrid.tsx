@@ -211,7 +211,7 @@ export default function BentoGrid() {
 
                             <div className="bg-black/50 p-5 rounded-lg font-mono text-[10px] md:text-xs border border-white/10 shadow-2xl skew-x-[-2deg] group-hover:skew-x-0 transition-all duration-300 w-full md:w-[55%] relative overflow-hidden">
                                 <div className="absolute top-0 right-0 p-2 opacity-50"><div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div></div>
-                                <div className="text-zinc-500 select-none mb-2">// POST {origin}/api/ingest</div>
+                                <div className="text-zinc-500 select-none mb-2" suppressHydrationWarning>// POST {origin}/api/ingest</div>
                                 <div className="text-purple-400">await <span className="text-yellow-300">fetch</span>(url, {'{'}</div>
                                 <div className="pl-4 text-blue-300">method: <span className="text-green-300">'POST'</span>,</div>
                                 <div className="pl-4 text-blue-300">headers: {'{'} <span className="text-green-300">'Authorization'</span>: <span className="text-orange-300">'Bearer sk_live_...'</span> {'}'},</div>

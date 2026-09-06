@@ -29,13 +29,7 @@ export function createClient() {
  * Automatically detects the current origin in browser environments,
  * and dynamically infers Vercel / environment settings on the server.
  */
-export const getURL = () => {
-    // 1. Client-side browser: Always automatically use the active origin
-    if (typeof window !== 'undefined' && window.location?.origin) {
-        return window.location.origin;
-    }
-
-    // 2. Server-side: Determine URL from environment variables
+export const getServerURL = () => {
     let url =
         process.env.NEXT_PUBLIC_APP_URL ||
         process.env.NEXT_PUBLIC_SITE_URL ||
@@ -52,6 +46,16 @@ export const getURL = () => {
     url = url.endsWith('/') ? url.slice(0, -1) : url;
 
     return url;
+};
+
+export const getURL = () => {
+    // 1. Client-side browser: Always automatically use the active origin
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        return window.location.origin;
+    }
+
+    // 2. Server-side: Determine URL from environment variables
+    return getServerURL();
 };
 
 /**

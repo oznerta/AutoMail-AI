@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getURL } from "@/utils/supabase/client";
+import { getServerURL } from "@/utils/supabase/client";
 
 /**
  * Hook that automatically resolves the active origin/base URL.
- * Automatically adapts to localhost, preview deployments, or custom production domains.
+ * Prevents React SSR hydration mismatches by returning a consistent
+ * server URL during initial render, and dynamically updating to window.location.origin after mount.
  */
 export function useOrigin(): string {
     const [origin, setOrigin] = useState<string>("");
@@ -16,6 +17,6 @@ export function useOrigin(): string {
         }
     }, []);
 
-    // Fallback to getURL() during SSR or before mount
-    return origin || (typeof window !== "undefined" && window.location?.origin ? window.location.origin : getURL());
+    // Return client origin once mounted, or server URL during SSR & initial hydration
+    return origin || getServerURL();
 }

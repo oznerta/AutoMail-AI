@@ -1,11 +1,4 @@
-
-"use client";
-
-import { useOrigin } from "@/hooks/use-origin";
-
 export default function ApiOverviewPage() {
-    const origin = useOrigin();
-
     return (
         <div className="space-y-6">
             <div className="space-y-2">
