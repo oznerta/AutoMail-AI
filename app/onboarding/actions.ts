@@ -2,8 +2,9 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
+import { cache } from "react";
 
-export async function checkOnboardingStatus() {
+const getCachedOnboardingStatus = cache(async () => {
     const supabase: any = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -21,6 +22,10 @@ export async function checkOnboardingStatus() {
     const isComplete = (profile?.preferences as any)?.onboarding_completed === true;
 
     return { isComplete };
+});
+
+export async function checkOnboardingStatus() {
+    return getCachedOnboardingStatus();
 }
 
 export async function completeOnboarding() {

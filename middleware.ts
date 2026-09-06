@@ -54,9 +54,7 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
+    const pathname = request.nextUrl.pathname;
 
     // Protected routes - require authentication
     const protectedPaths = [
@@ -70,18 +68,24 @@ export async function middleware(request: NextRequest) {
         '/settings',
         '/onboarding',
     ];
-    const isProtectedRoute = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path));
+    const isProtectedRoute = protectedPaths.some(path => pathname.startsWith(path));
+    const isAuthRoute = pathname === '/login' || pathname === '/signup';
+
+    // Fast path: skip auth checks on public pages, landing, docs, and public APIs
+    if (!isProtectedRoute && !isAuthRoute) {
+        return response;
+    }
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
 
     if (isProtectedRoute && !user) {
         return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    // Auth routes - redirect to contacts if already logged in
-    if (
-        (request.nextUrl.pathname === '/login' ||
-            request.nextUrl.pathname === '/signup') &&
-        user
-    ) {
+    // Auth routes - redirect to dashboard if already logged in
+    if (isAuthRoute && user) {
         return NextResponse.redirect(new URL('/dashboard', request.url))
     }
 
