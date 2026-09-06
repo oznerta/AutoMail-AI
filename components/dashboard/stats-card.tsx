@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
-import { AnimatedCounter } from "./animated-counter";
 
 interface StatsCardProps {
     title: string;
@@ -38,7 +37,7 @@ export function StatsCard({
             </CardHeader>
             <CardContent className="relative z-10">
                 <div className="text-2xl font-bold tracking-tight">
-                    <AnimatedCounter value={value} />
+                    {Intl.NumberFormat("en-US").format(value ?? 0)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                     {description}

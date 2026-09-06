@@ -13,7 +13,7 @@ export function AnimatedCounter({
     const ref = useRef<HTMLSpanElement>(null);
     const formattedInitial = Intl.NumberFormat("en-US").format(value);
 
-    const motionValue = useMotionValue(0);
+    const motionValue = useMotionValue(value);
     const springValue = useSpring(motionValue, {
         damping: 30,
         stiffness: 150,
@@ -21,11 +21,6 @@ export function AnimatedCounter({
     const isInView = useInView(ref, { once: true });
 
     useEffect(() => {
-        if (value === 0) {
-            if (ref.current) ref.current.textContent = "0";
-            return;
-        }
-
         if (isInView) {
             motionValue.set(value);
         }
