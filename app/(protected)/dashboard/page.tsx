@@ -46,20 +46,12 @@ export default async function DashboardPage() {
                     description="Successful deliveries"
                     icon={Mail}
                 />
-                <Card className="opacity-70 border-dashed bg-muted/20 hover:opacity-100 transition-opacity flex flex-col justify-center items-center group">
-                    <CardHeader className="flex flex-col items-center justify-center space-y-0 pb-2">
-                        {/* <CardTitle className="text-sm font-medium text-muted-foreground w-full flex justify-between">
-                            Open Rate <TrendingUp className="h-4 w-4" />
-                        </CardTitle> */}
-                        <TrendingUp className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
-                    </CardHeader>
-                    <CardContent className="text-center pb-6">
-                        <div className="text-2xl font-bold text-muted-foreground group-hover:text-foreground transition-colors">Analytics</div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Detailed reporting module coming soon
-                        </p>
-                    </CardContent>
-                </Card>
+                <StatsCard
+                    title="Total Campaigns"
+                    value={stats.totalCampaigns}
+                    description="Broadcasts created"
+                    icon={TrendingUp}
+                />
             </div>
 
             {/* Charts Section - NEW */}
