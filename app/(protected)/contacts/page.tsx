@@ -33,6 +33,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -507,27 +514,31 @@ export default function ContactsPage() {
                     />
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
-                    <select
-                        className="h-9 w-full sm:w-[130px] rounded-md border border-input bg-background/50 px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                        <option value="all">All Status</option>
-                        <option value="active">Active</option>
-                        <option value="unsubscribed">Unsubscribed</option>
-                        <option value="bounced">Bounced</option>
-                    </select>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="h-9 w-full sm:w-[130px] bg-background/50 border-input/60">
+                            <SelectValue placeholder="All Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
+                            <SelectItem value="bounced">Bounced</SelectItem>
+                        </SelectContent>
+                    </Select>
 
-                    <select
-                        className="h-9 w-full sm:w-[130px] rounded-md border border-input bg-background/50 px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        value={tagFilter}
-                        onChange={(e) => setTagFilter(e.target.value)}
-                    >
-                        <option value="all">All Tags</option>
-                        {allCurrentTags.map(tag => (
-                            <option key={tag} value={tag}>{tag}</option>
-                        ))}
-                    </select>
+                    <Select value={tagFilter} onValueChange={setTagFilter}>
+                        <SelectTrigger className="h-9 w-full sm:w-[130px] bg-background/50 border-input/60">
+                            <SelectValue placeholder="All Tags" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Tags</SelectItem>
+                            {allCurrentTags.map((tag) => (
+                                <SelectItem key={tag} value={tag}>
+                                    {tag}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
