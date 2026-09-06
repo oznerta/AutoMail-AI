@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 -- Enable RLS
+
+-- Ensure existing profiles tables have preferences JSONB
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'::jsonb;
+
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for profiles
@@ -100,8 +104,6 @@ CREATE INDEX IF NOT EXISTS idx_vault_keys_active ON vault_keys(is_active) WHERE 
 -- Stores contact information for email campaigns
 -- ============================================================================
 
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS phone TEXT;
-
 CREATE TABLE IF NOT EXISTS contacts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -118,6 +120,15 @@ CREATE TABLE IF NOT EXISTS contacts (
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   last_contacted_at TIMESTAMPTZ
 );
+
+
+-- Ensure existing contacts tables have all required columns
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS source TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS last_contacted_at TIMESTAMPTZ;
 
 -- Enable RLS
 ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
@@ -190,6 +201,18 @@ CREATE TABLE IF NOT EXISTS automations (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+
+-- Ensure existing automations tables have all required columns
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS total_sent INTEGER DEFAULT 0;
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS total_opened INTEGER DEFAULT 0;
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS total_clicked INTEGER DEFAULT 0;
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS total_bounced INTEGER DEFAULT 0;
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS workflow_config JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS email_template JSONB DEFAULT '{}'::jsonb;
 
 -- Enable RLS
 ALTER TABLE automations ENABLE ROW LEVEL SECURITY;
@@ -272,6 +295,11 @@ CREATE TABLE IF NOT EXISTS sender_identities (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+
+-- Ensure existing sender_identities tables have both boolean flags
+ALTER TABLE sender_identities ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT false;
+ALTER TABLE sender_identities ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT false;
 
 ALTER TABLE sender_identities ENABLE ROW LEVEL SECURITY;
 
