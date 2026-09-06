@@ -28,14 +28,17 @@ CREATE TABLE IF NOT EXISTS profiles (
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for profiles
+DROP POLICY IF EXISTS "Users can view their own profile" ON profiles;
 CREATE POLICY "Users can view their own profile"
   ON profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON profiles;
 CREATE POLICY "Users can update their own profile"
   ON profiles FOR UPDATE
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON profiles;
 CREATE POLICY "Users can insert their own profile"
   ON profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
@@ -66,18 +69,22 @@ CREATE TABLE IF NOT EXISTS vault_keys (
 ALTER TABLE vault_keys ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for vault_keys
+DROP POLICY IF EXISTS "Users can view their own keys" ON vault_keys;
 CREATE POLICY "Users can view their own keys"
   ON vault_keys FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own keys" ON vault_keys;
 CREATE POLICY "Users can insert their own keys"
   ON vault_keys FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own keys" ON vault_keys;
 CREATE POLICY "Users can update their own keys"
   ON vault_keys FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own keys" ON vault_keys;
 CREATE POLICY "Users can delete their own keys"
   ON vault_keys FOR DELETE
   USING (auth.uid() = user_id);
@@ -92,6 +99,8 @@ CREATE INDEX IF NOT EXISTS idx_vault_keys_active ON vault_keys(is_active) WHERE 
 -- ============================================================================
 -- Stores contact information for email campaigns
 -- ============================================================================
+
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS phone TEXT;
 
 CREATE TABLE IF NOT EXISTS contacts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -114,18 +123,22 @@ CREATE TABLE IF NOT EXISTS contacts (
 ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for contacts
+DROP POLICY IF EXISTS "Users can view their own contacts" ON contacts;
 CREATE POLICY "Users can view their own contacts"
   ON contacts FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own contacts" ON contacts;
 CREATE POLICY "Users can insert their own contacts"
   ON contacts FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own contacts" ON contacts;
 CREATE POLICY "Users can update their own contacts"
   ON contacts FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own contacts" ON contacts;
 CREATE POLICY "Users can delete their own contacts"
   ON contacts FOR DELETE
   USING (auth.uid() = user_id);
@@ -182,18 +195,22 @@ CREATE TABLE IF NOT EXISTS automations (
 ALTER TABLE automations ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for automations
+DROP POLICY IF EXISTS "Users can view their own automations" ON automations;
 CREATE POLICY "Users can view their own automations"
   ON automations FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own automations" ON automations;
 CREATE POLICY "Users can insert their own automations"
   ON automations FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own automations" ON automations;
 CREATE POLICY "Users can update their own automations"
   ON automations FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own automations" ON automations;
 CREATE POLICY "Users can delete their own automations"
   ON automations FOR DELETE
   USING (auth.uid() = user_id);
@@ -217,21 +234,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
 CREATE TRIGGER update_profiles_updated_at
   BEFORE UPDATE ON profiles
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_vault_keys_updated_at ON vault_keys;
 CREATE TRIGGER update_vault_keys_updated_at
   BEFORE UPDATE ON vault_keys
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_contacts_updated_at ON contacts;
 CREATE TRIGGER update_contacts_updated_at
   BEFORE UPDATE ON contacts
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_automations_updated_at ON automations;
 CREATE TRIGGER update_automations_updated_at
   BEFORE UPDATE ON automations
   FOR EACH ROW
@@ -254,18 +275,22 @@ CREATE TABLE IF NOT EXISTS sender_identities (
 
 ALTER TABLE sender_identities ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their own sender identities" ON sender_identities;
 CREATE POLICY "Users can view their own sender identities"
   ON sender_identities FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own sender identities" ON sender_identities;
 CREATE POLICY "Users can insert their own sender identities"
   ON sender_identities FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own sender identities" ON sender_identities;
 CREATE POLICY "Users can update their own sender identities"
   ON sender_identities FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own sender identities" ON sender_identities;
 CREATE POLICY "Users can delete their own sender identities"
   ON sender_identities FOR DELETE
   USING (auth.uid() = user_id);
@@ -290,18 +315,22 @@ CREATE TABLE IF NOT EXISTS webhook_keys (
 
 ALTER TABLE webhook_keys ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their own webhook keys" ON webhook_keys;
 CREATE POLICY "Users can view their own webhook keys"
   ON webhook_keys FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own webhook keys" ON webhook_keys;
 CREATE POLICY "Users can insert their own webhook keys"
   ON webhook_keys FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own webhook keys" ON webhook_keys;
 CREATE POLICY "Users can update their own webhook keys"
   ON webhook_keys FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own webhook keys" ON webhook_keys;
 CREATE POLICY "Users can delete their own webhook keys"
   ON webhook_keys FOR DELETE
   USING (auth.uid() = user_id);
@@ -326,18 +355,22 @@ CREATE TABLE IF NOT EXISTS email_templates (
 
 ALTER TABLE email_templates ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their own email templates" ON email_templates;
 CREATE POLICY "Users can view their own email templates"
   ON email_templates FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own email templates" ON email_templates;
 CREATE POLICY "Users can insert their own email templates"
   ON email_templates FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own email templates" ON email_templates;
 CREATE POLICY "Users can update their own email templates"
   ON email_templates FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own email templates" ON email_templates;
 CREATE POLICY "Users can delete their own email templates"
   ON email_templates FOR DELETE
   USING (auth.uid() = user_id);
@@ -358,14 +391,17 @@ CREATE TABLE IF NOT EXISTS tags (
 
 ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their own tags" ON tags;
 CREATE POLICY "Users can view their own tags"
   ON tags FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own tags" ON tags;
 CREATE POLICY "Users can insert their own tags"
   ON tags FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own tags" ON tags;
 CREATE POLICY "Users can delete their own tags"
   ON tags FOR DELETE
   USING (auth.uid() = user_id);
@@ -379,14 +415,17 @@ CREATE TABLE IF NOT EXISTS contact_tags (
 
 ALTER TABLE contact_tags ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view contact tags" ON contact_tags;
 CREATE POLICY "Users can view contact tags"
   ON contact_tags FOR SELECT
   USING (EXISTS (SELECT 1 FROM contacts WHERE contacts.id = contact_tags.contact_id AND contacts.user_id = auth.uid()));
 
+DROP POLICY IF EXISTS "Users can insert contact tags" ON contact_tags;
 CREATE POLICY "Users can insert contact tags"
   ON contact_tags FOR INSERT
   WITH CHECK (EXISTS (SELECT 1 FROM contacts WHERE contacts.id = contact_tags.contact_id AND contacts.user_id = auth.uid()));
 
+DROP POLICY IF EXISTS "Users can delete contact tags" ON contact_tags;
 CREATE POLICY "Users can delete contact tags"
   ON contact_tags FOR DELETE
   USING (EXISTS (SELECT 1 FROM contacts WHERE contacts.id = contact_tags.contact_id AND contacts.user_id = auth.uid()));
@@ -406,6 +445,7 @@ CREATE TABLE IF NOT EXISTS custom_field_definitions (
 
 ALTER TABLE custom_field_definitions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage custom field definitions" ON custom_field_definitions;
 CREATE POLICY "Users can manage custom field definitions"
   ON custom_field_definitions FOR ALL
   USING (auth.uid() = user_id);
@@ -428,14 +468,17 @@ CREATE TABLE IF NOT EXISTS automation_queue (
 
 ALTER TABLE automation_queue ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their automation queue" ON automation_queue;
 CREATE POLICY "Users can view their automation queue"
   ON automation_queue FOR SELECT
   USING (EXISTS (SELECT 1 FROM automations WHERE automations.id = automation_queue.automation_id AND automations.user_id = auth.uid()));
 
+DROP POLICY IF EXISTS "Users can insert their automation queue" ON automation_queue;
 CREATE POLICY "Users can insert their automation queue"
   ON automation_queue FOR INSERT
   WITH CHECK (EXISTS (SELECT 1 FROM automations WHERE automations.id = automation_queue.automation_id AND automations.user_id = auth.uid()));
 
+DROP POLICY IF EXISTS "Users can update their automation queue" ON automation_queue;
 CREATE POLICY "Users can update their automation queue"
   ON automation_queue FOR UPDATE
   USING (EXISTS (SELECT 1 FROM automations WHERE automations.id = automation_queue.automation_id AND automations.user_id = auth.uid()));
