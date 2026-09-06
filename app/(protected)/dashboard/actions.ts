@@ -37,27 +37,26 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const sumSent = automationsData?.reduce((acc: number, a: any) => acc + (a.total_sent || 0), 0) || 0;
     const emailsSent = Math.max(sumSent, queueCompleted || 0);
 
-    // Calculate realistic subscriber growth (cumulative total and monthly new signups) over trailing 12 months
+    // Calculate realistic subscriber growth (cumulative total and monthly new signups) for calendar year (Jan - Dec)
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const growthArray: { name: string; total: number; new: number }[] = [];
-
     const now = new Date();
-    for (let i = 11; i >= 0; i--) {
-        const monthDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
-        const monthStartDate = new Date(now.getFullYear(), now.getMonth() - i, 1, 0, 0, 0);
-        const monthName = months[monthDate.getMonth()];
+    const currentYear = now.getFullYear();
+
+    const growthArray = months.map((monthName, m) => {
+        const monthEndDate = new Date(currentYear, m + 1, 0, 23, 59, 59);
+        const monthStartDate = new Date(currentYear, m, 1, 0, 0, 0);
 
         const totalAtMonth = (allContacts as { created_at: string }[] | null)?.filter(
-            c => new Date(c.created_at) <= monthDate
+            c => new Date(c.created_at) <= monthEndDate
         ).length || 0;
 
         const newAtMonth = (allContacts as { created_at: string }[] | null)?.filter(c => {
             const d = new Date(c.created_at);
-            return d >= monthStartDate && d <= monthDate;
+            return d >= monthStartDate && d <= monthEndDate;
         }).length || 0;
 
-        growthArray.push({ name: monthName, total: totalAtMonth, new: newAtMonth });
-    }
+        return { name: monthName, total: totalAtMonth, new: newAtMonth };
+    });
 
     return {
         totalContacts: totalContacts || 0,

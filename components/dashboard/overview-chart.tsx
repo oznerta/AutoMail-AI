@@ -28,8 +28,8 @@ export function OverviewChart({ data }: OverviewChartProps) {
                     <CardTitle className="text-base font-semibold">Subscriber Growth</CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
                         {view === "total" 
-                            ? `Total audience over trailing 12 months (${currentAudience} current)` 
-                            : "New subscribers gained per month"}
+                            ? `Total audience throughout ${new Date().getFullYear()} (${currentAudience} current)` 
+                            : `New subscribers gained per month (${new Date().getFullYear()})`}
                     </p>
                 </div>
                 {/* View toggle */}
